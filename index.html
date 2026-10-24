@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#4a5df9">
+<title>Mexicano</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f2f4f8;
+    color: #1a1a2e;
+    min-height: 100vh;
+    font-size: 17px;
+  }
+  .screen { padding: 16px; padding-bottom: 110px; max-width: 600px; margin: 0 auto; }
+  .hidden { display: none !important; }
+
+  h1 { font-size: 1.5em; margin: 0 0 16px; }
+  h2 { font-size: 1.05em; margin: 18px 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+  .card { background: white; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+  label { display: block; margin: 10px 0 6px; font-weight: 500; font-size: 0.95em; }
+  input[type=text], input[type=number], textarea {
+    width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px;
+    background: #fff; font-family: inherit; -webkit-appearance: none;
+  }
+  textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, monospace; }
+
+  .radio-row { display: flex; gap: 8px; }
+  .radio-row label {
+    flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center;
+    background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9em;
+    display: flex; align-items: center; justify-content: center; min-height: 48px;
+    transition: all 0.15s;
+  }
+  .radio-row input { display: none; }
+  .radio-row label:has(input:checked) { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; }
+
+  button {
+    font-family: inherit; font-size: 1em; border: none; border-radius: 12px;
+    padding: 14px 20px; cursor: pointer; font-weight: 600;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: #4a5df9; color: white; width: 100%; font-size: 1.1em; padding: 18px; }
+  .btn-secondary { background: #e8eaf0; color: #1a1a2e; }
+  .btn-small { padding: 8px 14px; font-size: 0.9em; background: #e8eaf0; color: #1a1a2e; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: white; border-bottom: 1px solid #e0e3ea;
+    position: sticky; top: 0; z-index: 10; gap: 8px;
+  }
+  .topbar-title { font-weight: 600; }
+  .topbar-round { font-size: 0.85em; color: #888; margin-top: 2px; }
+  .topbar-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    background: #f0f2f7; border: none; border-radius: 10px; padding: 0;
+    font-size: 1.15em; cursor: pointer; min-width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .sitout-banner {
+    background: #fff4e0; border: 1px solid #ffd88a; border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 12px; font-size: 0.95em;
+  }
+  .sitout-banner b { color: #a86a00; }
+
+  .court-card { background: white; border-radius: 14px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .court-title { font-size: 0.8em; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 600; }
+  .pair-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; padding: 16px; margin: 6px 0; font-size: 1.05em;
+    background: #f5f6fa; border: 2px solid transparent; border-radius: 10px;
+    text-align: left; font-weight: 500; cursor: pointer; color: inherit;
+  }
+  .pair-btn.winner { background: #e5f7ea; border-color: #22a857; color: #146c34; }
+  .pair-btn .check { font-weight: bold; display: none; }
+  .pair-btn.winner .check { display: inline; }
+  .pair-btn .score-display { font-size: 1em; color: #666; font-weight: 700; min-width: 28px; text-align: right; }
+  .pair-btn.winner .score-display { color: #146c34; }
+  .vs-divider { text-align: center; color: #aaa; font-size: 0.8em; margin: -4px 0; }
+
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: white;
+    border-top: 1px solid #e0e3ea; padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .modal {
+    background: white; border-radius: 20px 20px 0 0; padding: 24px 20px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    width: 100%; max-width: 600px;
+  }
+  .modal h3 { margin: 0 0 16px; }
+  .score-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+  .score-row .label-side { flex: 1; font-weight: 500; }
+  .score-row input { width: 80px; text-align: center; font-size: 1.3em; font-weight: 600; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .modal-actions button { flex: 1; padding: 16px; }
+  .modal-actions .btn-primary { width: auto; }
+
+  .results-table { width: 100%; border-collapse: collapse; font-size: 0.9em; background: white; border-radius: 12px; overflow: hidden; }
+  .results-table th, .results-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
+  .results-table th { background: #f5f6fa; font-size: 0.72em; text-transform: uppercase; color: #666; letter-spacing: 0.5px; }
+  .results-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table th.num { text-align: right; }
+  .results-table tr.rank-1 td { font-weight: 700; background: #fff8e6; }
+  .name-cell { word-break: break-word; }
+
+  .error { color: #d33; font-size: 0.9em; margin-top: 8px; min-height: 1em; }
+  .helper { font-size: 0.85em; color: #888; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ALOITUS / ASETUKSET -->
+<div id="setupScreen" class="screen">
+  <h1>🎾 Mexicano</h1>
+
+  <div class="card">
+    <label for="playersInput">Pelaajat (yksi per rivi)</label>
+    <textarea id="playersInput" placeholder="A&#10;B&#10;C&#10;D&#10;E&#10;F&#10;G&#10;H&#10;I&#10;J"></textarea>
+    <div class="helper" id="playerCountHelper">0 pelaajaa</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Paritus</h2>
+    <div class="radio-row">
+      <label><input type="radio" name="pairingMode" value="1+4"><span>1+4 vs 2+3</span></label>
+      <label><input type="radio" name="pairingMode" value="1+3"><span>1+3 vs 2+4</span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Kirjaustapa</h2>
+    <div class="radio-row">
+      <label><input type="radio" name="scoringMode" value="win"><span>Pelkkä voitto</span></label>
+      <label><input type="radio" name="scoringMode" value="score"><span>Pisteiden syöttö</span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <label for="courtsInput">Kenttien määrä</label>
+    <input type="number" id="courtsInput" min="1" value="1">
+    <div class="helper" id="courtsHelper"></div>
+  </div>
+
+  <div id="setupError" class="error"></div>
+
+  <button class="btn-primary" id="startBtn" style="margin-top:12px">Aloita</button>
+  <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
+  <button class="btn-small" id="resetBtn" style="width:100%;margin-top:24px;opacity:0.5">Tyhjennä kaikki tiedot</button>
+</div>
+
+<!-- PÄÄNÄKYMÄ -->
+<div id="mainScreen" class="hidden">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="mainTitle">Mexicano</div>
+      <div class="topbar-round" id="roundInfo"></div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="undoBtn" title="Kumoa viimeisin kierros" aria-label="Kumoa">↶</button>
+      <button class="icon-btn" id="resultsBtn" title="Tulokset" aria-label="Tulokset">📊</button>
+      <button class="icon-btn" id="settingsBtn" title="Asetukset" aria-label="Asetukset">⚙️</button>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="sitout-banner" id="sitoutBanner"></div>
+    <div id="courtsContainer"></div>
+  </div>
+
+  <div class="bottom-bar">
+    <button class="btn-primary" id="nextRoundBtn" disabled>Seuraava kierros</button>
+  </div>
+</div>
+
+<!-- TULOSNÄKYMÄ -->
+<div id="resultsScreen" class="hidden">
+  <div class="topbar">
+    <div class="topbar-title">Tulokset</div>
+    <button class="btn-small" id="backFromResultsBtn">Takaisin</button>
+  </div>
+  <div class="screen">
+    <table class="results-table" id="resultsTable"></table>
+  </div>
+</div>
+
+<!-- PISTEMODAALI -->
+<div id="scoreModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="scoreModalTitle">Syötä pisteet</h3>
+    <div class="score-row">
+      <div class="label-side" id="scorePair1Label"></div>
+      <input type="number" id="score1Input" min="0" inputmode="numeric" placeholder="0">
+    </div>
+    <div class="score-row">
+      <div class="label-side" id="scorePair2Label"></div>
+      <input type="number" id="score2Input" min="0" inputmode="numeric" placeholder="0">
+    </div>
+    <div id="scoreError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="scoreCancelBtn">Peruuta</button>
+      <button class="btn-primary" id="scoreSaveBtn">Tallenna</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Tila
+// ============================================================
+let state = {
+  players: [],
+  pairingMode: '1+4',
+  scoringMode: 'win',
+  courts: 1,
+  rounds: [],
+  currentRound: null,
+  screen: 'setup',
+  editingFromMain: false,
+};
+
+const STORAGE_KEY = 'mexicano_state_v1';
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      players: state.players,
+      pairingMode: state.pairingMode,
+      scoringMode: state.scoringMode,
+      courts: state.courts,
+      rounds: state.rounds,
+      currentRound: state.currentRound,
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (Array.isArray(s.players) && s.players.length >= 4) {
+      state.players = s.players;
+      state.pairingMode = s.pairingMode || '1+4';
+      state.scoringMode = s.scoringMode || 'win';
+      state.courts = s.courts || 1;
+      state.rounds = Array.isArray(s.rounds) ? s.rounds : [];
+      state.currentRound = s.currentRound || null;
+      return true;
+    }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+
+// ============================================================
+// Tilastot
+// ============================================================
+function computeStats() {
+  const stats = state.players.map(() => ({ points: 0, wins: 0, games: 0, sitOuts: 0 }));
+  for (const round of state.rounds) {
+    for (const idx of round.sitOuts) stats[idx].sitOuts++;
+    for (const m of round.matches) {
+      for (const idx of [...m.p1, ...m.p2]) stats[idx].games++;
+      if (m.winner === 0 || m.winner === 1) {
+        const wp = m.winner === 0 ? m.p1 : m.p2;
+        for (const idx of wp) stats[idx].wins++;
+        if (m.score1 !== null && m.score2 !== null) {
+          for (const idx of m.p1) stats[idx].points += m.score1;
+          for (const idx of m.p2) stats[idx].points += m.score2;
+        } else {
+          for (const idx of wp) stats[idx].points += 1;
+        }
+      }
+    }
+  }
+  return stats;
+}
+
+// ============================================================
+// Kierroksen generointi
+// ============================================================
+function generateRound() {
+  const n = state.players.length;
+  const sitOutCount = n - state.courts * 4;
+  if (sitOutCount < 0) return null;
+
+  // Kuinka monta kertaa kukin on istunut
+  const sitOuts = state.players.map((_, i) =>
+    state.rounds.reduce((acc, r) => acc + (r.sitOuts.includes(i) ? 1 : 0), 0)
+  );
+
+  // Vähiten levänneet tauolle; tasapeli → korkeampi indeksi ensin
+  const order = state.players.map((_, i) => i);
+  order.sort((a, b) => {
+    if (sitOuts[a] !== sitOuts[b]) return sitOuts[a] - sitOuts[b];
+    return b - a;
+  });
+
+  const sitOutIndices = order.slice(0, sitOutCount);
+  const playing = order.slice(sitOutCount);
+
+  // Pelivuorossa olevat pistejärjestykseen
+  const stats = computeStats();
+  playing.sort((a, b) => {
+    if (stats[b].points !== stats[a].points) return stats[b].points - stats[a].points;
+    if (stats[b].wins !== stats[a].wins) return stats[b].wins - stats[a].wins;
+    return a - b;
+  });
+
+  const matches = [];
+  for (let c = 0; c < state.courts; c++) {
+    const g = playing.slice(c * 4, c * 4 + 4);
+    let p1, p2;
+    if (state.pairingMode === '1+4') {
+      p1 = [g[0], g[3]];
+      p2 = [g[1], g[2]];
+    } else {
+      p1 = [g[0], g[2]];
+      p2 = [g[1], g[3]];
+    }
+    matches.push({ p1, p2, winner: null, score1: null, score2: null });
+  }
+
+  return { sitOuts: sitOutIndices, matches };
+}
+
+// ============================================================
+// Näkymien vaihto
+// ============================================================
+function showScreen(name) {
+  state.screen = name;
+  document.getElementById('setupScreen').classList.toggle('hidden', name !== 'setup');
+  document.getElementById('mainScreen').classList.toggle('hidden', name !== 'main');
+  document.getElementById('resultsScreen').classList.toggle('hidden', name !== 'results');
+}
+
+// ============================================================
+// Päänäkymän renderöinti
+// ============================================================
+function renderMain() {
+  const r = state.currentRound;
+  if (!r) return;
+
+  const courtWord = state.courts === 1 ? 'kenttä' : 'kenttää';
+  document.getElementById('mainTitle').textContent = `Mexicano · ${state.players.length} pelaajaa`;
+  document.getElementById('roundInfo').textContent =
+    `Kierros ${state.rounds.length + 1} · ${state.courts} ${courtWord}`;
+
+  const sitoutNames = r.sitOuts.map(i => state.players[i].name);
+  document.getElementById('sitoutBanner').innerHTML = sitoutNames.length
+    ? `<b>Tauolla:</b> ${sitoutNames.map(esc).join(', ')}`
+    : `<b>Kaikki pelaavat</b> — ei taukoja tällä kierroksella`;
+
+  const container = document.getElementById('courtsContainer');
+  container.innerHTML = '';
+  r.matches.forEach((m, mi) => {
+    const card = document.createElement('div');
+    card.className = 'court-card';
+
+    const title = document.createElement('div');
+    title.className = 'court-title';
+    title.textContent = `Kenttä ${mi + 1}`;
+    card.appendChild(title);
+
+    card.appendChild(makePairButton(m, 0, mi));
+
+    const vs = document.createElement('div');
+    vs.className = 'vs-divider';
+    vs.textContent = 'vs';
+    card.appendChild(vs);
+
+    card.appendChild(makePairButton(m, 1, mi));
+    container.appendChild(card);
+  });
+
+  updateNextButton();
+}
+
+function makePairButton(match, pairIdx, matchIdx) {
+  const pair = pairIdx === 0 ? match.p1 : match.p2;
+  const isWinner = match.winner === pairIdx;
+  const names = pair.map(i => state.players[i].name);
+
+  const btn = document.createElement('button');
+  btn.className = 'pair-btn' + (isWinner ? ' winner' : '');
+  btn.type = 'button';
+
+  const left
