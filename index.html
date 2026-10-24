@@ -400,4 +400,341 @@ function makePairButton(match, pairIdx, matchIdx) {
   btn.className = 'pair-btn' + (isWinner ? ' winner' : '');
   btn.type = 'button';
 
-  const left
+  const left = document.createElement('span');
+  left.textContent = names.map(esc).join(' + ');
+  btn.appendChild(left);
+
+  if (match.score1 !== null && match.score2 !== null) {
+    const sc = document.createElement('span');
+    sc.className = 'score-display';
+    sc.textContent = pairIdx === 0 ? match.score1 : match.score2;
+    btn.appendChild(sc);
+  }
+
+  const check = document.createElement('span');
+  check.className = 'check';
+  check.textContent = '✓';
+  btn.appendChild(check);
+
+  btn.addEventListener('click', () => {
+    if (state.scoringMode === 'win') {
+      if (match.winner === pairIdx) {
+        match.winner = null;
+        match.score1 = null;
+        match.score2 = null;
+      } else {
+        match.winner = pairIdx;
+        match.score1 = pairIdx === 0 ? 1 : 0;
+        match.score2 = pairIdx === 0 ? 0 : 1;
+      }
+      saveState();
+      renderMain();
+    } else {
+      openScoreModal(matchIdx);
+    }
+  });
+
+  return btn;
+}
+
+function updateNextButton() {
+  const r = state.currentRound;
+  if (!r) return;
+  const allDone = r.matches.every(m => m.winner !== null);
+  document.getElementById('nextRoundBtn').disabled = !allDone;
+}
+
+// ============================================================
+// Pistemodaali
+// ============================================================
+let editingMatchIdx = -1;
+
+function openScoreModal(matchIdx) {
+  const m = state.currentRound.matches[matchIdx];
+  editingMatchIdx = matchIdx;
+
+  document.getElementById('scoreModalTitle').textContent = `Kenttä ${matchIdx + 1} — syötä pisteet`;
+  document.getElementById('scorePair1Label').textContent = m.p1.map(i => state.players[i].name).join(' + ');
+  document.getElementById('scorePair2Label').textContent = m.p2.map(i => state.players[i].name).join(' + ');
+  document.getElementById('score1Input').value = m.score1 !== null ? m.score1 : '';
+  document.getElementById('score2Input').value = m.score2 !== null ? m.score2 : '';
+  document.getElementById('scoreError').textContent = '';
+
+  document.getElementById('scoreModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('score1Input').focus(), 100);
+}
+
+function closeScoreModal() {
+  document.getElementById('scoreModal').classList.add('hidden');
+  editingMatchIdx = -1;
+}
+
+function saveScoreModal() {
+  const s1 = parseInt(document.getElementById('score1Input').value, 10);
+  const s2 = parseInt(document.getElementById('score2Input').value, 10);
+  const errEl = document.getElementById('scoreError');
+
+  if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) {
+    errEl.textContent = 'Anna kelvolliset pisteet molemmille.';
+    return;
+  }
+  if (s1 === s2) {
+    errEl.textContent = 'Tasapeli ei ole sallittu.';
+    return;
+  }
+
+  const m = state.currentRound.matches[editingMatchIdx];
+  m.score1 = s1;
+  m.score2 = s2;
+  m.winner = s1 > s2 ? 0 : 1;
+
+  saveState();
+  closeScoreModal();
+  renderMain();
+}
+
+// ============================================================
+// Kierroksen kulku
+// ============================================================
+function nextRound() {
+  const r = state.currentRound;
+  if (!r || !r.matches.every(m => m.winner !== null)) return;
+
+  state.rounds.push(JSON.parse(JSON.stringify(r)));
+  const next = generateRound();
+  if (!next) {
+    alert('Ei voida luoda uutta kierrosta nykyisillä asetuksilla.');
+    return;
+  }
+  state.currentRound = next;
+  saveState();
+  renderMain();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function undoRound() {
+  if (state.rounds.length === 0) {
+    alert('Ei kumottavaa kierrosta.');
+    return;
+  }
+  if (!confirm('Kumotaanko viimeisin kierros? Sen tulokset palaavat muokattaviksi.')) return;
+
+  const last = state.rounds.pop();
+  state.currentRound = last;
+  saveState();
+  renderMain();
+}
+
+// ============================================================
+// Asetukset
+// ============================================================
+function renderSetup() {
+  document.getElementById('playersInput').value = state.players.map(p => p.name).join('\n');
+
+  const pairRadio = document.querySelector(`input[name="pairingMode"][value="${state.pairingMode}"]`);
+  if (pairRadio) pairRadio.checked = true;
+  const scoreRadio = document.querySelector(`input[name="scoringMode"][value="${state.scoringMode}"]`);
+  if (scoreRadio) scoreRadio.checked = true;
+  document.getElementById('courtsInput').value = state.courts;
+
+  updateSetupHelpers();
+
+  document.getElementById('cancelSettingsBtn').style.display =
+    state.editingFromMain ? 'block' : 'none';
+  document.getElementById('startBtn').textContent =
+    state.editingFromMain ? 'Tallenna asetukset' : 'Aloita';
+}
+
+function updateSetupHelpers() {
+  const names = parsePlayers(document.getElementById('playersInput').value);
+  const n = names.length;
+  document.getElementById('playerCountHelper').textContent = `${n} pelaajaa`;
+
+  const maxCourts = Math.max(1, Math.floor(n / 4));
+  const courtsInput = document.getElementById('courtsInput');
+  courtsInput.max = maxCourts;
+  document.getElementById('courtsHelper').textContent = n >= 4
+    ? `Max ${maxCourts} kenttää (${maxCourts * 4} pelaajaa)`
+    : 'Tarvitaan vähintään 4 pelaajaa';
+
+  const cur = parseInt(courtsInput.value, 10);
+  if (cur > maxCourts) courtsInput.value = maxCourts;
+  if (cur < 1 || isNaN(cur)) courtsInput.value = 1;
+}
+
+function parsePlayers(text) {
+  return text
+    .split('\n')
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(name => ({ name }));
+}
+
+function applySettings() {
+  const errEl = document.getElementById('setupError');
+  errEl.textContent = '';
+
+  const names = parsePlayers(document.getElementById('playersInput').value);
+  if (names.length < 4) {
+    errEl.textContent = 'Tarvitaan vähintään 4 pelaajaa.';
+    return;
+  }
+
+  const pairingMode = document.querySelector('input[name="pairingMode"]:checked').value;
+  const scoringMode = document.querySelector('input[name="scoringMode"]:checked').value;
+  const courts = parseInt(document.getElementById('courtsInput').value, 10);
+  const maxCourts = Math.floor(names.length / 4);
+
+  if (isNaN(courts) || courts < 1) {
+    errEl.textContent = 'Kenttien määrä oltava vähintään 1.';
+    return;
+  }
+  if (courts > maxCourts) {
+    errEl.textContent = `Kenttiä voi olla enintään ${maxCourts} pelaajamäärällä ${names.length}.`;
+    return;
+  }
+
+  const playersChanged = JSON.stringify(names.map(p => p.name)) !==
+                         JSON.stringify(state.players.map(p => p.name));
+  const courtsChanged = state.courts !== courts;
+  const pairingChanged = state.pairingMode !== pairingMode;
+  const isDuringEvent = state.editingFromMain && state.currentRound !== null;
+  const anyResults = isDuringEvent &&
+    state.currentRound.matches.some(m => m.winner !== null);
+
+  if (isDuringEvent && (playersChanged || courtsChanged || pairingChanged)) {
+    if (playersChanged) {
+      if (!confirm('Pelaajalista on muuttunut. Tämä nollaa kierrokset ja tilastot. Jatketaanko?')) return;
+      state.rounds = [];
+    } else if (anyResults) {
+      if (!confirm('Asetukset muuttuivat. Nykyisen kierroksen tulokset menetetään. Jatketaanko?')) return;
+    }
+    state.currentRound = null;
+  }
+
+  state.players = names;
+  state.pairingMode = pairingMode;
+  state.scoringMode = scoringMode;
+  state.courts = courts;
+
+  if (!state.currentRound) {
+    state.currentRound = generateRound();
+    if (!state.currentRound) {
+      errEl.textContent = 'Kierroksen luonti epäonnistui. Tarkista asetukset.';
+      return;
+    }
+  }
+
+  saveState();
+  state.editingFromMain = false;
+  showScreen('main');
+  renderMain();
+}
+
+// ============================================================
+// Tulokset
+// ============================================================
+function renderResults() {
+  const stats = computeStats();
+  const rows = state.players.map((p, i) => ({ name: p.name, ...stats[i] }));
+  rows.sort((a, b) =>
+    b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name)
+  );
+
+  const maxPoints = rows.length ? Math.max(...rows.map(r => r.points)) : 0;
+
+  const table = document.getElementById('resultsTable');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Nimi</th>
+        <th class="num">Pisteet</th>
+        <th class="num">Voitot</th>
+        <th class="num">Pelit</th>
+        <th class="num">Tauot</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(r => `
+        <tr${r.points === maxPoints && maxPoints > 0 ? ' class="rank-1"' : ''}>
+          <td class="name-cell">${esc(r.name)}</td>
+          <td class="num">${r.points}</td>
+          <td class="num">${r.wins}</td>
+          <td class="num">${r.games}</td>
+          <td class="num">${r.sitOuts}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+}
+
+// ============================================================
+// Apurit
+// ============================================================
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+// ============================================================
+// Tapahtumat
+// ============================================================
+document.getElementById('playersInput').addEventListener('input', updateSetupHelpers);
+document.getElementById('courtsInput').addEventListener('input', updateSetupHelpers);
+document.getElementById('startBtn').addEventListener('click', applySettings);
+
+document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+  state.editingFromMain = false;
+  showScreen('main');
+  renderMain();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm('Tyhjennetäänkö kaikki tiedot? Tätä ei voi perua.')) {
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+});
+
+document.getElementById('nextRoundBtn').addEventListener('click', nextRound);
+document.getElementById('undoBtn').addEventListener('click', undoRound);
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  state.editingFromMain = true;
+  showScreen('setup');
+  renderSetup();
+});
+
+document.getElementById('resultsBtn').addEventListener('click', () => {
+  renderResults();
+  showScreen('results');
+});
+
+document.getElementById('backFromResultsBtn').addEventListener('click', () => {
+  showScreen('main');
+  renderMain();
+});
+
+document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
+document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
+document.getElementById('scoreModal').addEventListener('click', (e) => {
+  if (e.target.id === 'scoreModal') closeScoreModal();
+});
+
+// ============================================================
+// Käynnistys
+// ============================================================
+(function init() {
+  if (loadState() && state.currentRound) {
+    showScreen('main');
+    renderMain();
+  } else {
+    state.editingFromMain = false;
+    showScreen('setup');
+    renderSetup();
+  }
+})();
+</script>
+</body>
+</html>
