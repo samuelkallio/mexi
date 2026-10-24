@@ -14,7 +14,10 @@
   h2 { font-size: 1.05em; margin: 18px 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
   .card { background: white; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
   label { display: block; margin: 10px 0 6px; font-weight: 500; font-size: 0.95em; }
-  input[type=text], input[type=number], textarea { width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px; background: #fff; font-family: inherit; -webkit-appearance: none; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px;
+    background: #fff; font-family: inherit; -webkit-appearance: none;
+  }
   textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, monospace; }
   .radio-row { display: flex; gap: 8px; }
   .radio-row label { flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center; background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9em; display: flex; align-items: center; justify-content: center; min-height: 48px; transition: all 0.15s; }
@@ -61,6 +64,7 @@
   .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
   .modal-actions button { flex: 1; padding: 16px; }
   .modal-actions .btn-primary { width: auto; }
+
   .results-table { width: 100%; border-collapse: collapse; font-size: 0.9em; background: white; border-radius: 12px; overflow: hidden; }
   .results-table th, .results-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
   .results-table th { background: #f5f6fa; font-size: 0.72em; text-transform: uppercase; color: #666; letter-spacing: 0.5px; }
@@ -68,6 +72,17 @@
   .results-table th.num { text-align: right; }
   .results-table tr.rank-1 td { font-weight: 700; background: #fff8e6; }
   .name-cell { word-break: break-word; }
+
+  .history-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
+  .history-table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 0.82em; background: white; }
+  .history-table th, .history-table td { padding: 9px 6px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; word-break: break-word; }
+  .history-table th { background: #f5f6fa; font-size: 0.72em; text-transform: uppercase; color: #666; letter-spacing: 0.5px; position: sticky; top: 0; }
+  .history-table td.num { text-align: center; white-space: nowrap; }
+  .history-table th.num { text-align: center; }
+  .history-table tr.sitout-row td { background: #fff8e0; }
+  .history-table td.sitout-cell { color: #a86a00; font-weight: 600; }
+  .history-empty { text-align: center; padding: 24px; color: #888; }
+
   .error { color: #d33; font-size: 0.9em; margin-top: 8px; min-height: 1em; }
   .helper { font-size: 0.85em; color: #888; margin-top: 4px; }
   .loading-overlay { position: fixed; inset: 0; background: rgba(242,244,248,0.95); z-index: 200; display: flex; align-items: center; justify-content: center; }
@@ -180,10 +195,32 @@
 <div id="resultsScreen" class="hidden">
   <div class="topbar">
     <div class="topbar-title">Tulokset</div>
-    <button class="btn-small" id="backFromResultsBtn">Takaisin</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn-small" id="historyBtn">Kierrokset</button>
+      <button class="btn-small" id="backFromResultsBtn">Takaisin</button>
+    </div>
   </div>
   <div class="screen">
     <table class="results-table" id="resultsTable"></table>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="historyScreen" class="hidden">
+  <div class="topbar">
+    <div class="topbar-title">Kaikki kierrokset</div>
+    <button class="btn-small" id="backFromHistoryBtn">Takaisin</button>
+  </div>
+  <div class="screen">
+    <div class="card" style="padding:12px 16px;margin-bottom:12px">
+      <label for="historyFilter" style="margin:0 0 6px;font-size:0.9em">Suodata pelaajan mukaan</label>
+      <select id="historyFilter">
+        <option value="">Kaikki pelaajat</option>
+      </select>
+    </div>
+    <div class="history-scroll">
+      <table class="history-table" id="historyTable"></table>
+    </div>
   </div>
 </div>
 
@@ -257,7 +294,7 @@ let state = {
   rounds: [],
   currentRound: null,
   tiebreakOrder: [],
-  viewIdx: null,   // null = current round, integer = past round index
+  viewIdx: null,
   screen: 'landing'
 };
 
@@ -275,6 +312,7 @@ function showScreen(name) {
   document.getElementById('setupScreen').classList.toggle('hidden', name !== 'setup');
   document.getElementById('mainScreen').classList.toggle('hidden', name !== 'main');
   document.getElementById('resultsScreen').classList.toggle('hidden', name !== 'results');
+  document.getElementById('historyScreen').classList.toggle('hidden', name !== 'history');
 }
 
 function showLoading(msg) {
@@ -397,7 +435,6 @@ function attachEventListener() {
         state.currentRound = s.currentRound || null;
         state.tiebreakOrder = s.tiebreakOrder || [];
       }
-      // Jos viewIdx osoittaa olemattomaan kierrokseen, palaa nykyiseen
       if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) {
         state.viewIdx = null;
       }
@@ -409,6 +446,7 @@ function attachEventListener() {
       }
       if (state.screen === 'main') renderMain();
       else if (state.screen === 'results') renderResults();
+      else if (state.screen === 'history') renderHistoryScreen();
     },
     (error) => {
       hideLoading();
@@ -426,20 +464,16 @@ function generateRoundForState(st, existingRounds) {
   const sitOutCount = n - st.courts * 4;
   if (sitOutCount < 0) return null;
 
-  // Laske tauot per pelaaja
   const counts = new Array(n).fill(0);
   for (const r of existingRounds) {
     for (const idx of r.sitOuts) counts[idx]++;
   }
 
-  // Onko uusi sykli? Kaikilla sama taukomäärä
   const isNewCycle = counts.every(c => c === counts[0]);
   let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n)
-    ? st.tiebreakOrder.slice()
-    : null;
+    ? st.tiebreakOrder.slice() : null;
 
   if (isNewCycle || !tiebreakOrder) {
-    // Sekoita kaikki, mutta siirrä edellisen kierroksen taukoilijat loppuun
     const all = Array.from({ length: n }, (_, i) => i);
     for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -451,7 +485,6 @@ function generateRoundForState(st, existingRounds) {
     tiebreakOrder = [...others, ...recent];
   }
 
-  // Järjestä: ensin vähiten tauonneet, tasapeli tiebreakOrderin mukaan
   const tiePos = new Array(n);
   for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
   const sorted = Array.from({ length: n }, (_, i) => i);
@@ -463,7 +496,6 @@ function generateRoundForState(st, existingRounds) {
   const sitOutIndices = sorted.slice(0, sitOutCount);
   const playing = sorted.slice(sitOutCount);
 
-  // Pelivuorossa olevat pistejärjestykseen
   const stats = st.players.map(() => ({ points: 0, wins: 0 }));
   for (const r of existingRounds) {
     for (const m of r.matches) {
@@ -599,21 +631,13 @@ async function applySettings() {
   };
 
   const needRegenerate = !state.currentRound || resetRounds || regenerateCurrent;
-
   if (needRegenerate) {
-    // Mikä on "edellisen" kierroksen tauot?
     let lastSitOuts = [];
-    if (!resetRounds && state.currentRound) {
-      lastSitOuts = state.currentRound.sitOuts || [];
-    } else if (!resetRounds && state.rounds.length > 0) {
-      lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
-    }
+    if (!resetRounds && state.currentRound) lastSitOuts = state.currentRound.sitOuts || [];
+    else if (!resetRounds && state.rounds.length > 0) lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
     const gen = generateRoundForState({
-      players: names,
-      pairingMode,
-      courts,
-      tiebreakOrder: [],
-      lastRoundSitOuts: lastSitOuts,
+      players: names, pairingMode, courts,
+      tiebreakOrder: [], lastRoundSitOuts: lastSitOuts,
     }, newState.rounds);
     if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui. Tarkista pelaajamäärä ja kentät.'; return; }
     newState.currentRound = { sitOuts: gen.sitOuts, matches: gen.matches };
@@ -644,7 +668,7 @@ async function applySettings() {
 }
 
 // ============================================================
-// Näkymädatan valinta
+// Päänäkymä
 // ============================================================
 function getViewData() {
   if (state.viewIdx === null || state.viewIdx >= state.rounds.length) {
@@ -653,9 +677,6 @@ function getViewData() {
   return { isCurrent: false, round: state.rounds[state.viewIdx], roundNumber: state.viewIdx + 1, idx: state.viewIdx };
 }
 
-// ============================================================
-// Päänäkymä
-// ============================================================
 function renderMain() {
   const vd = getViewData();
   if (!vd.round) return;
@@ -665,24 +686,19 @@ function renderMain() {
   document.getElementById('roundInfo').textContent =
     `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`;
 
-  // Navigointilabel
   const navLabel = document.getElementById('roundNavLabel');
   navLabel.innerHTML = `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`
     + (vd.isCurrent ? '' : '<span class="past-tag">mennyt</span>');
 
   document.getElementById('prevRoundBtn').disabled = !canGoBack();
   document.getElementById('nextRoundArrowBtn').disabled = !canGoForward();
-
-  // Menneen kierroksen banneri
   document.getElementById('pastRoundBanner').classList.toggle('hidden', vd.isCurrent);
 
-  // Tauot
   const sitoutNames = vd.round.sitOuts.map(i => state.players[i].name);
   document.getElementById('sitoutBanner').innerHTML = sitoutNames.length
     ? `<b>Tauolla:</b> ${sitoutNames.map(esc).join(', ')}`
     : `<b>Kaikki pelaavat</b> — ei taukoja`;
 
-  // Kentät
   const container = document.getElementById('courtsContainer');
   container.innerHTML = '';
   vd.round.matches.forEach((m, mi) => {
@@ -750,9 +766,7 @@ function canGoBack() {
   if (state.viewIdx === null) return true;
   return state.viewIdx > 0;
 }
-function canGoForward() {
-  return state.viewIdx !== null;
-}
+function canGoForward() { return state.viewIdx !== null; }
 function goBack() {
   if (!canGoBack()) return;
   if (state.viewIdx === null) state.viewIdx = state.rounds.length - 1;
@@ -769,7 +783,7 @@ function goForward() {
 }
 
 // ============================================================
-// Tuloksen tallennus (nykyinen TAI mennyt)
+// Tuloksen tallennus
 // ============================================================
 function matchPath(vd, matchIdx) {
   if (vd.isCurrent) return `events/${eventCode}/state/currentRound/matches/${matchIdx}`;
@@ -895,6 +909,144 @@ function renderResults() {
 }
 
 // ============================================================
+// Kierroshistoria
+// ============================================================
+function getAllRounds() {
+  const all = [...state.rounds];
+  if (state.currentRound) all.push(state.currentRound);
+  return all;
+}
+
+function formatPairs(m) {
+  const p1 = m.p1.map(i => state.players[i].name).join(' + ');
+  const p2 = m.p2.map(i => state.players[i].name).join(' + ');
+  if (m.winner === 0) return `<b>${esc(p1)}</b> vs ${esc(p2)}`;
+  if (m.winner === 1) return `${esc(p1)} vs <b>${esc(p2)}</b>`;
+  return `${esc(p1)} vs ${esc(p2)}`;
+}
+
+function formatScore(m) {
+  if (m.winner === null) return '—';
+  const s1 = m.score1 !== null ? m.score1 : '?';
+  const s2 = m.score2 !== null ? m.score2 : '?';
+  return `${s1}–${s2}`;
+}
+
+function renderHistoryScreen() {
+  const filterSelect = document.getElementById('historyFilter');
+  const currentVal = filterSelect.value;
+  filterSelect.innerHTML = '<option value="">Kaikki pelaajat</option>' +
+    state.players.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+  if (state.players.some(p => p.name === currentVal)) filterSelect.value = currentVal;
+  renderHistoryTable();
+}
+
+function renderHistoryTable() {
+  const filterName = document.getElementById('historyFilter').value;
+  const table = document.getElementById('historyTable');
+
+  if (!state.players.length) {
+    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia</td></tr></tbody>';
+    return;
+  }
+
+  const all = getAllRounds();
+  if (all.length === 0) {
+    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia vielä</td></tr></tbody>';
+    return;
+  }
+
+  const rows = [];
+
+  // Uusin ensin: kierrosnumero laskevassa järjestyksessä
+  for (let i = all.length - 1; i >= 0; i--) {
+    const round = all[i];
+    const roundNum = i + 1;
+    const sitoutNames = round.sitOuts.map(idx => state.players[idx].name);
+    const sitoutStr = sitoutNames.length > 0 ? sitoutNames.map(esc).join(', ') : '—';
+
+    if (!filterName) {
+      round.matches.forEach((m, mi) => {
+        rows.push({
+          roundNum, court: mi + 1,
+          pairs: formatPairs(m),
+          score: formatScore(m),
+          sitouts: sitoutStr,
+          isSitout: false,
+          isFirstInRound: mi === 0,
+          roundRowCount: round.matches.length,
+        });
+      });
+    } else {
+      const playerMatches = round.matches.filter(m => {
+        const names = [...m.p1, ...m.p2].map(idx => state.players[idx].name);
+        return names.includes(filterName);
+      });
+      if (playerMatches.length > 0) {
+        playerMatches.forEach((m, mi) => {
+          const courtIdx = round.matches.indexOf(m) + 1;
+          rows.push({
+            roundNum, court: courtIdx,
+            pairs: formatPairs(m),
+            score: formatScore(m),
+            sitouts: sitoutStr,
+            isSitout: false,
+            isFirstInRound: mi === 0,
+            roundRowCount: playerMatches.length,
+          });
+        });
+      } else if (sitoutNames.includes(filterName)) {
+        rows.push({
+          roundNum, court: null,
+          pairs: '—',
+          score: '—',
+          sitouts: sitoutStr,
+          isSitout: true,
+          isFirstInRound: true,
+          roundRowCount: 1,
+        });
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia valitulle pelaajalle</td></tr></tbody>';
+    return;
+  }
+
+  let html = `<thead>
+    <tr>
+      <th class="num">Kierros</th>
+      <th class="num">Kenttä</th>
+      <th>Peliparit</th>
+      <th class="num">Tulos</th>
+      <th>Taukoilijat</th>
+    </tr>
+  </thead><tbody>`;
+
+  rows.forEach(r => {
+    const trClass = r.isSitout ? ' class="sitout-row"' : '';
+    const courtCell = r.isSitout
+      ? '<span class="sitout-cell">Tauko</span>'
+      : `K${r.court}`;
+    html += `<tr${trClass}>`;
+    if (r.isFirstInRound) {
+      html += `<td class="num" rowspan="${r.roundRowCount}">${r.roundNum}</td>`;
+    }
+    html += `<td class="num">${courtCell}</td>`;
+    html += `<td>${r.pairs}</td>`;
+    html += `<td class="num">${r.score}</td>`;
+    if (r.isFirstInRound) {
+      html += `<td rowspan="${r.roundRowCount}">${r.sitouts}</td>`;
+    }
+    html += `</tr>`;
+  });
+
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+// ============================================================
 // QR-jako
 // ============================================================
 function openShareModal() {
@@ -978,6 +1130,16 @@ document.getElementById('backFromResultsBtn').addEventListener('click', () => {
   showScreen('main');
   renderMain();
 });
+
+document.getElementById('historyBtn').addEventListener('click', () => {
+  renderHistoryScreen();
+  showScreen('history');
+});
+document.getElementById('backFromHistoryBtn').addEventListener('click', () => {
+  showScreen('results');
+  renderResults();
+});
+document.getElementById('historyFilter').addEventListener('change', renderHistoryTable);
 
 document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
 document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
