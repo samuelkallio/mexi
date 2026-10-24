@@ -318,13 +318,30 @@ function hideLoading() {
   document.getElementById('loadingOverlay').classList.add('hidden');
 }
 
+function setLandingError(msg) {
+  const el = document.getElementById('landingError');
+  if (el) el.textContent = msg;
+}
+
+// Globaali virhekuuntelija, jotta virheet näkyvät käyttöliittymässä
+window.addEventListener('error', (e) => {
+  if (state.screen === 'landing') setLandingError('Virhe: ' + (e.message || 'tuntematon'));
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason);
+  if (state.screen === 'landing') setLandingError('Virhe: ' + msg);
+});
+
 // ============================================================
 // Tapahtumakoodi
 // ============================================================
-const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 32 merkkiä, ei 0/1/I/O
+const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 32 merkkiä
 
 function generateCode() {
   const buf = new Uint8Array(5);
+  if (!window.crypto || !window.crypto.getRandomValues) {
+    throw new Error('Selain ei tue satunnaislukugeneraattoria. Avaa sivu HTTPS-osoitteesta.');
+  }
   crypto.getRandomValues(buf);
   let code = '';
   for (let i = 0; i < 5; i++) code += ALPHABET[buf[i] % 32];
@@ -336,8 +353,7 @@ function isValidCode(code) {
 }
 
 async function createNewEvent() {
-  const errEl = document.getElementById('landingError');
-  errEl.textContent = '';
+  setLandingError('');
   showLoading('Luodaan tapahtumaa...');
   try {
     let code = null;
@@ -348,20 +364,18 @@ async function createNewEvent() {
     }
     if (!code) throw new Error('Koodin luonti epäonnistui. Yritä uudelleen.');
     await set(ref(db, `events/${code}`), { createdAt: Date.now() });
-    hideLoading();
     navigateToEvent(code);
   } catch (e) {
     hideLoading();
-    errEl.textContent = 'Virhe: ' + e.message;
+    setLandingError('Virhe: ' + (e.message || 'tuntematon'));
   }
 }
 
 async function joinExistingEvent(code) {
-  const errEl = document.getElementById('landingError');
-  errEl.textContent = '';
+  setLandingError('');
   code = (code || '').toUpperCase().trim();
   if (!isValidCode(code)) {
-    errEl.textContent = 'Koodi on 5 merkkiä (ei 0, 1, I tai O).';
+    setLandingError('Koodi on 5 merkkiä (ei 0, 1, I tai O).');
     return;
   }
   showLoading('Etsitään tapahtumaa...');
@@ -369,22 +383,25 @@ async function joinExistingEvent(code) {
     const snap = await get(ref(db, `events/${code}`));
     if (!snap.exists()) {
       hideLoading();
-      errEl.textContent = 'Tapahtumaa ei löytynyt koodilla ' + code + '.';
+      setLandingError('Tapahtumaa ei löytynyt koodilla ' + code + '.');
       return;
     }
-    hideLoading();
     navigateToEvent(code);
   } catch (e) {
     hideLoading();
-    errEl.textContent = 'Virhe: ' + e.message;
+    setLandingError('Virhe: ' + (e.message || 'tuntematon'));
   }
 }
 
+// TÄRKEÄÄ: aseta 'initializing' vasta showScreenin JÄLKEEN,
+// koska showScreen itse asettaa state.screen-arvon.
 function navigateToEvent(code) {
   const url = new URL(location.href);
   url.searchParams.set('event', code);
   history.pushState({}, '', url.toString());
   eventCode = code;
+  showScreen('none');
+  state.screen = 'initializing';
   attachEventListener();
 }
 
@@ -397,8 +414,9 @@ function exitEvent() {
   state.players = [];
   state.rounds = [];
   state.currentRound = null;
+  state.screen = 'landing';
   showScreen('landing');
-  document.getElementById('landingError').textContent = '';
+  setLandingError('');
 }
 
 // ============================================================
@@ -406,52 +424,58 @@ function exitEvent() {
 // ============================================================
 function attachEventListener() {
   if (!eventCode) return;
-  if (eventListenerOff) eventListenerOff();
+  if (eventListenerOff) { eventListenerOff(); eventListenerOff = null; }
   showLoading('Yhdistetään tapahtumaan ' + eventCode + '...');
 
   const eventRef = ref(db, `events/${eventCode}`);
-  eventListenerOff = onValue(eventRef, (snapshot) => {
-    const data = snapshot.val();
-    hideLoading();
+  eventListenerOff = onValue(eventRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      hideLoading();
 
-    if (data === null) {
-      alert('Tapahtumaa ' + eventCode + ' ei löytynyt.');
-      exitEvent();
-      return;
-    }
-
-    const s = data.state;
-    const wasInitializing = state.screen === 'initializing';
-
-    if (s) {
-      state.players = s.players || [];
-      state.pairingMode = s.pairingMode || '1+4';
-      state.scoringMode = s.scoringMode || 'win';
-      state.courts = s.courts || 1;
-      state.rounds = s.rounds || [];
-      state.currentRound = s.currentRound || null;
-    }
-
-    if (wasInitializing) {
-      if (s && state.currentRound) {
-        showScreen('main');
-        renderMain();
-      } else {
-        showScreen('setup');
-        renderSetup();
+      if (data === null) {
+        alert('Tapahtumaa ' + eventCode + ' ei löytynyt.');
+        exitEvent();
+        return;
       }
-      return;
-    }
 
-    // Myöhemmät päivitykset
-    if (state.screen === 'main') renderMain();
-    else if (state.screen === 'results') renderResults();
-    // setup: älä häiritse muokkauksen aikana
-  });
+      const s = data.state;
+      const wasInitializing = state.screen === 'initializing';
+
+      if (s) {
+        state.players = s.players || [];
+        state.pairingMode = s.pairingMode || '1+4';
+        state.scoringMode = s.scoringMode || 'win';
+        state.courts = s.courts || 1;
+        state.rounds = s.rounds || [];
+        state.currentRound = s.currentRound || null;
+      }
+
+      if (wasInitializing) {
+        if (s && state.currentRound) {
+          showScreen('main');
+          renderMain();
+        } else {
+          showScreen('setup');
+          renderSetup();
+        }
+        return;
+      }
+
+      // Myöhemmät päivitykset
+      if (state.screen === 'main') renderMain();
+      else if (state.screen === 'results') renderResults();
+    },
+    (error) => {
+      hideLoading();
+      alert('Yhteysvirhe tietokantaan: ' + (error.message || error));
+      exitEvent();
+    }
+  );
 }
 
 // ============================================================
-// Kierroksen generointi (puhdas funktio, transaktioissa käytettäväksi)
+// Kierroksen generointi
 // ============================================================
 function generateRoundForState(st, existingRounds) {
   const n = st.players.length;
@@ -462,7 +486,6 @@ function generateRoundForState(st, existingRounds) {
     existingRounds.reduce((acc, r) => acc + (r.sitOuts.includes(i) ? 1 : 0), 0)
   );
 
-  // Vähiten levänneet tauolle, tasapeli korkeampi indeksi ensin
   const order = st.players.map((_, i) => i);
   order.sort((a, b) => {
     if (sitOuts[a] !== sitOuts[b]) return sitOuts[a] - sitOuts[b];
@@ -472,7 +495,6 @@ function generateRoundForState(st, existingRounds) {
   const sitOutIndices = order.slice(0, sitOutCount);
   const playing = order.slice(sitOutCount);
 
-  // Tilastot menneistä kierroksista
   const stats = st.players.map(() => ({ points: 0, wins: 0 }));
   for (const r of existingRounds) {
     for (const m of r.matches) {
@@ -510,7 +532,7 @@ function generateRoundForState(st, existingRounds) {
 }
 
 // ============================================================
-// Tilastot (tulosnäkymä)
+// Tilastot
 // ============================================================
 function computeStats() {
   const stats = state.players.map(() => ({ points: 0, wins: 0, games: 0, sitOuts: 0 }));
@@ -633,7 +655,7 @@ async function applySettings() {
   try {
     await set(ref(db, `events/${eventCode}/state`), newState);
     hideLoading();
-    // Siirrytään päänäkymään; kuuntelija päivittää tilan
+    // Päivitä paikallinen tila välittömästi; onValue päivittää myöhemmin
     state.players = newState.players;
     state.pairingMode = newState.pairingMode;
     state.scoringMode = newState.scoringMode;
@@ -644,7 +666,7 @@ async function applySettings() {
     renderMain();
   } catch (e) {
     hideLoading();
-    errEl.textContent = 'Virhe: ' + e.message;
+    errEl.textContent = 'Virhe: ' + (e.message || 'tuntematon');
   }
 }
 
@@ -735,7 +757,7 @@ function updateNextButton() {
 }
 
 // ============================================================
-// Voittajan valinta (Pelkkä voitto)
+// Voittajan valinta
 // ============================================================
 async function selectWinner(matchIdx, pairIdx) {
   const m = state.currentRound.matches[matchIdx];
@@ -751,7 +773,7 @@ async function selectWinner(matchIdx, pairIdx) {
       });
     }
   } catch (e) {
-    alert('Tallennus epäonnistui: ' + e.message);
+    alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
   }
 }
 
@@ -796,7 +818,7 @@ async function saveScoreModal() {
     });
     closeScoreModal();
   } catch (e) {
-    errEl.textContent = 'Tallennus epäonnistui: ' + e.message;
+    errEl.textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
   }
 }
 
@@ -809,7 +831,7 @@ async function nextRound() {
     await runTransaction(stateRef, (current) => {
       if (!current || !current.currentRound) return current;
       if (!current.currentRound.matches.every(m => m.winner !== null && m.winner !== undefined)) {
-        return current; // ei kaikkia tuloksia → ei muutosta
+        return current;
       }
       const allRounds = [...(current.rounds || []), current.currentRound];
       const newRound = generateRoundForState(current, allRounds);
@@ -818,7 +840,7 @@ async function nextRound() {
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
-    alert('Kierroksen vaihto epäonnistui: ' + e.message);
+    alert('Kierroksen vaihto epäonnistui: ' + (e.message || 'tuntematon'));
   }
 }
 
@@ -841,7 +863,7 @@ async function undoRound() {
       };
     });
   } catch (e) {
-    alert('Kumous epäonnistui: ' + e.message);
+    alert('Kumous epäonnistui: ' + (e.message || 'tuntematon'));
   }
 }
 
@@ -983,8 +1005,9 @@ document.getElementById('shareModal').addEventListener('click', (e) => {
 window.addEventListener('popstate', () => {
   const params = new URLSearchParams(location.search);
   const code = params.get('event');
-  if (code && code !== eventCode) {
+  if (code && code.toUpperCase() !== eventCode) {
     eventCode = code.toUpperCase();
+    showScreen('none');
     state.screen = 'initializing';
     attachEventListener();
   } else if (!code && eventCode) {
@@ -1002,13 +1025,11 @@ window.addEventListener('popstate', () => {
     const upper = code.toUpperCase();
     if (isValidCode(upper)) {
       eventCode = upper;
-      state.screen = 'initializing';
       showScreen('none');
-      showLoading('Yhdistetään tapahtumaan ' + eventCode + '...');
+      state.screen = 'initializing';
       attachEventListener();
       return;
     } else {
-      // Virheellinen koodi URL:ssa
       history.replaceState({}, '', location.pathname);
     }
   }
