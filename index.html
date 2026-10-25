@@ -8,53 +8,57 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f2f4f8; color: #1a1a2e; min-height: 100vh; font-size: 17px; }
-  .screen { padding: 16px; padding-bottom: 110px; max-width: 600px; margin: 0 auto; }
+  .screen { padding: 12px; padding-bottom: 90px; max-width: 600px; margin: 0 auto; }
   .hidden { display: none !important; }
   h1 { font-size: 1.5em; margin: 0 0 16px; }
   h2 { font-size: 1.05em; margin: 18px 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
   .card { background: white; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
   label { display: block; margin: 10px 0 6px; font-weight: 500; font-size: 0.95em; }
-  input[type=text], input[type=number], textarea, select {
-    width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px;
-    background: #fff; font-family: inherit; -webkit-appearance: none;
-  }
+  input[type=text], input[type=number], textarea, select { width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px; background: #fff; font-family: inherit; -webkit-appearance: none; }
   textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, monospace; }
   .radio-row { display: flex; gap: 8px; }
   .radio-row label { flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center; background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9em; display: flex; align-items: center; justify-content: center; min-height: 48px; transition: all 0.15s; }
   .radio-row input { display: none; }
   .radio-row label:has(input:checked) { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; }
   button { font-family: inherit; font-size: 1em; border: none; border-radius: 12px; padding: 14px 20px; cursor: pointer; font-weight: 600; transition: transform 0.1s, opacity 0.1s; }
-  button:active { transform: scale(0.97); }
+  button:active:not(:disabled) { transform: scale(0.97); }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-primary { background: #4a5df9; color: white; width: 100%; font-size: 1.1em; padding: 18px; }
+  .btn-primary { background: #4a5df9; color: white; width: 100%; font-size: 1.1em; padding: 16px; border-radius: 12px; font-weight: 600; }
+  .btn-primary:disabled { background: #cbd0d9; color: #8a92a3; opacity: 1; }
   .btn-secondary { background: #e8eaf0; color: #1a1a2e; }
   .btn-small { padding: 8px 14px; font-size: 0.9em; background: #e8eaf0; color: #1a1a2e; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: white; border-bottom: 1px solid #e0e3ea; position: sticky; top: 0; z-index: 10; gap: 8px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e3ea; position: sticky; top: 0; z-index: 10; gap: 8px; }
   .topbar-title { font-weight: 600; }
   .topbar-round { font-size: 0.85em; color: #888; margin-top: 2px; }
   .topbar-actions { display: flex; gap: 6px; }
-  .icon-btn { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.15em; cursor: pointer; min-width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+  .icon-btn { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.15em; cursor: pointer; min-width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
 
-  .round-nav { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e3ea; }
-  .round-nav-arrow { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.1em; cursor: pointer; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #1a1a2e; }
+  .round-nav { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: white; border-bottom: 1px solid #e0e3ea; }
+  .round-nav-arrow { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.1em; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #1a1a2e; }
   .round-nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
   .round-nav-label { flex: 1; text-align: center; font-size: 0.95em; font-weight: 500; color: #555; }
   .round-nav-label .past-tag { display: inline-block; background: #ffeaa0; color: #7a5a00; font-size: 0.7em; padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 
-  .sitout-banner { background: #fff4e0; border: 1px solid #ffd88a; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; font-size: 0.95em; }
+  .sitout-banner { background: #fff4e0; border: 1px solid #ffd88a; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85em; }
   .sitout-banner b { color: #a86a00; }
-  .past-banner { background: #fff8e0; border: 1px solid #ffe4a0; border-radius: 12px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.9em; color: #7a5a00; }
-  .court-card { background: white; border-radius: 14px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  .court-title { font-size: 0.8em; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 600; }
-  .pair-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 16px; margin: 6px 0; font-size: 1.05em; background: #f5f6fa; border: 2px solid transparent; border-radius: 10px; text-align: left; font-weight: 500; cursor: pointer; color: inherit; }
-  .pair-btn.winner { background: #e5f7ea; border-color: #22a857; color: #146c34; }
-  .pair-btn .check { font-weight: bold; display: none; }
-  .pair-btn.winner .check { display: inline; }
-  .pair-btn .score-display { font-size: 1em; color: #666; font-weight: 700; min-width: 28px; text-align: right; }
-  .pair-btn.winner .score-display { color: #146c34; }
-  .vs-divider { text-align: center; color: #aaa; font-size: 0.8em; margin: -4px 0; }
+  .past-banner { background: #fff8e0; border: 1px solid #ffe4a0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85em; color: #7a5a00; }
+
+  /* Kompakti kenttänäkymä */
+  .court-list { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 12px; }
+  .court-row { display: flex; align-items: stretch; border-bottom: 1px solid #eee; min-height: 64px; }
+  .court-row:last-child { border-bottom: none; }
+  .court-name { width: 42px; display: flex; align-items: center; justify-content: center; background: #f5f6fa; font-weight: 600; color: #666; font-size: 0.85em; border-right: 1px solid #eee; flex-shrink: 0; }
+  
+  .compact-pair { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 6px 4px; border: none; background: transparent; font-family: inherit; font-size: 0.95em; font-weight: 500; color: #1a1a2e; transition: background 0.15s; line-height: 1.3; cursor: pointer; margin: 0; border-radius: 0; text-align: center; }
+  .compact-pair.winner { background: #e5f7ea; color: #146c34; font-weight: 700; }
+  .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  .compact-score { display: flex; align-items: center; justify-content: center; padding: 0 8px; font-weight: 700; color: #777; font-size: 1em; min-width: 56px; border-left: 1px solid #eee; border-right: 1px solid #eee; background: #fafafa; flex-shrink: 0; }
+  .compact-score.winner { color: #146c34; background: #e5f7ea; }
+
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e3ea; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); z-index: 20; }
   .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; }
+  
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
   .modal { background: white; border-radius: 20px 20px 0 0; padding: 24px 20px; padding-bottom: max(24px, env(safe-area-inset-bottom)); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
   .modal h3 { margin: 0 0 16px; }
@@ -457,7 +461,7 @@ function attachEventListener() {
 }
 
 // ============================================================
-// Kierroksen generointi (uusi tauologiikka)
+// Kierroksen generointi
 // ============================================================
 function generateRoundForState(st, existingRounds) {
   const n = st.players.length;
@@ -668,7 +672,7 @@ async function applySettings() {
 }
 
 // ============================================================
-// Päänäkymä
+// Päänäkymä (Kompakti)
 // ============================================================
 function getViewData() {
   if (state.viewIdx === null || state.viewIdx >= state.rounds.length) {
@@ -701,49 +705,60 @@ function renderMain() {
 
   const container = document.getElementById('courtsContainer');
   container.innerHTML = '';
+
+  const list = document.createElement('div');
+  list.className = 'court-list';
+
   vd.round.matches.forEach((m, mi) => {
-    const card = document.createElement('div');
-    card.className = 'court-card';
-    const title = document.createElement('div');
-    title.className = 'court-title';
-    title.textContent = `Kenttä ${mi + 1}`;
-    card.appendChild(title);
-    card.appendChild(makePairButton(vd, m, 0, mi));
-    const vs = document.createElement('div');
-    vs.className = 'vs-divider';
-    vs.textContent = 'vs';
-    card.appendChild(vs);
-    card.appendChild(makePairButton(vd, m, 1, mi));
-    container.appendChild(card);
+    const row = document.createElement('div');
+    row.className = 'court-row';
+
+    const cName = document.createElement('div');
+    cName.className = 'court-name';
+    cName.textContent = `K${mi + 1}`;
+    row.appendChild(cName);
+
+    row.appendChild(makeCompactPair(vd, m, 0, mi));
+
+    const scoreDiv = document.createElement('div');
+    scoreDiv.className = 'compact-score' + (m.winner !== null ? ' winner' : '');
+    if (m.score1 !== null && m.score2 !== null) {
+      scoreDiv.textContent = `${m.score1} - ${m.score2}`;
+    } else {
+      scoreDiv.textContent = 'vs';
+    }
+    row.appendChild(scoreDiv);
+
+    row.appendChild(makeCompactPair(vd, m, 1, mi));
+
+    list.appendChild(row);
   });
+
+  container.appendChild(list);
 
   updateBottomButton(vd);
 }
 
-function makePairButton(vd, match, pairIdx, matchIdx) {
+function makeCompactPair(vd, match, pairIdx, matchIdx) {
   const pair = pairIdx === 0 ? match.p1 : match.p2;
   const isWinner = match.winner === pairIdx;
   const names = pair.map(i => state.players[i].name);
+
   const btn = document.createElement('button');
-  btn.className = 'pair-btn' + (isWinner ? ' winner' : '');
+  btn.className = 'compact-pair' + (isWinner ? ' winner' : '');
   btn.type = 'button';
-  const left = document.createElement('span');
-  left.textContent = names.map(esc).join(' + ');
-  btn.appendChild(left);
-  if (match.score1 !== null && match.score2 !== null) {
-    const sc = document.createElement('span');
-    sc.className = 'score-display';
-    sc.textContent = pairIdx === 0 ? match.score1 : match.score2;
-    btn.appendChild(sc);
-  }
-  const check = document.createElement('span');
-  check.className = 'check';
-  check.textContent = '✓';
-  btn.appendChild(check);
+
+  names.forEach(name => {
+    const span = document.createElement('span');
+    span.textContent = name;
+    btn.appendChild(span);
+  });
+
   btn.addEventListener('click', () => {
     if (state.scoringMode === 'win') selectWinner(vd, matchIdx, pairIdx);
     else openScoreModal(vd, matchIdx);
   });
+
   return btn;
 }
 
@@ -958,7 +973,6 @@ function renderHistoryTable() {
 
   const rows = [];
 
-  // Uusin ensin: kierrosnumero laskevassa järjestyksessä
   for (let i = all.length - 1; i >= 0; i--) {
     const round = all[i];
     const roundNum = i + 1;
