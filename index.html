@@ -22,9 +22,10 @@
   .radio-row label:has(input:checked) { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; }
   button { font-family: inherit; font-size: 1em; border: none; border-radius: 12px; padding: 14px 20px; cursor: pointer; font-weight: 600; transition: transform 0.1s, opacity 0.1s; }
   button:active:not(:disabled) { transform: scale(0.97); }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  
   .btn-primary { background: #4a5df9; color: white; width: 100%; font-size: 1.1em; padding: 16px; border-radius: 12px; font-weight: 600; }
-  .btn-primary:disabled { background: #cbd0d9; color: #8a92a3; opacity: 1; }
+  .btn-primary:disabled { background: #cbd0d9 !important; color: #8a92a3 !important; opacity: 1 !important; cursor: not-allowed; }
+  
   .btn-secondary { background: #e8eaf0; color: #1a1a2e; }
   .btn-small { padding: 8px 14px; font-size: 0.9em; background: #e8eaf0; color: #1a1a2e; }
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e3ea; position: sticky; top: 0; z-index: 10; gap: 8px; }
@@ -53,7 +54,13 @@
   .compact-pair.winner { background: #e5f7ea; color: #146c34; font-weight: 700; }
   .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   
-  .compact-score { display: flex; align-items: center; justify-content: center; padding: 0 8px; font-weight: 700; color: #777; font-size: 1em; min-width: 56px; border-left: 1px solid #eee; border-right: 1px solid #eee; background: #fafafa; flex-shrink: 0; }
+  /* Kiinteä leveys tuloskentälle */
+  .compact-score { 
+    display: flex; align-items: center; justify-content: center; 
+    width: 70px; flex-shrink: 0; 
+    padding: 0; font-weight: 700; color: #777; font-size: 1em; 
+    border-left: 1px solid #eee; border-right: 1px solid #eee; background: #fafafa; 
+  }
   .compact-score.winner { color: #146c34; background: #e5f7ea; }
 
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e3ea; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); z-index: 20; }
@@ -504,7 +511,7 @@ function generateRoundForState(st, existingRounds) {
   for (const r of existingRounds) {
     for (const m of r.matches) {
       if (m.winner === 0 || m.winner === 1) {
-        if (m.score1 !== null && m.score2 !== null) {
+        if (typeof m.score1 === 'number' && typeof m.score2 === 'number') {
           for (const i of m.p1) stats[i].points += m.score1;
           for (const i of m.p2) stats[i].points += m.score2;
         } else {
@@ -545,7 +552,7 @@ function computeStats() {
       if (m.winner === 0 || m.winner === 1) {
         const wp = m.winner === 0 ? m.p1 : m.p2;
         for (const idx of wp) stats[idx].wins++;
-        if (m.score1 !== null && m.score2 !== null) {
+        if (typeof m.score1 === 'number' && typeof m.score2 === 'number') {
           for (const idx of m.p1) stats[idx].points += m.score1;
           for (const idx of m.p2) stats[idx].points += m.score2;
         } else {
@@ -611,7 +618,7 @@ async function applySettings() {
   const courtsChanged = state.courts !== courts;
   const pairingChanged = state.pairingMode !== pairingMode;
   const anyResults = state.currentRound &&
-                     state.currentRound.matches.some(m => m.winner !== null);
+                     state.currentRound.matches.some(m => m.winner === 0 || m.winner === 1);
 
   let resetRounds = false;
   let regenerateCurrent = false;
@@ -721,11 +728,14 @@ function renderMain() {
     row.appendChild(makeCompactPair(vd, m, 0, mi));
 
     const scoreDiv = document.createElement('div');
-    scoreDiv.className = 'compact-score' + (m.winner !== null ? ' winner' : '');
-    if (m.score1 !== null && m.score2 !== null) {
+    // Tarkistetaan onko kyseessä voittaja (0 tai 1). Undefined/null ei ole voittaja.
+    scoreDiv.className = 'compact-score' + (m.winner === 0 || m.winner === 1 ? ' winner' : '');
+    
+    // Tarkistetaan onko pisteet numeroita. Jos ei, tulostetaan kaksi välilyöntiä.
+    if (typeof m.score1 === 'number' && typeof m.score2 === 'number') {
       scoreDiv.textContent = `${m.score1} - ${m.score2}`;
     } else {
-      scoreDiv.textContent = 'vs';
+      scoreDiv.innerHTML = '&nbsp;&nbsp;';
     }
     row.appendChild(scoreDiv);
 
@@ -741,6 +751,7 @@ function renderMain() {
 
 function makeCompactPair(vd, match, pairIdx, matchIdx) {
   const pair = pairIdx === 0 ? match.p1 : match.p2;
+  // Voittaja on vain jos se on eksplisiittisesti 0 tai 1
   const isWinner = match.winner === pairIdx;
   const names = pair.map(i => state.players[i].name);
 
@@ -766,7 +777,9 @@ function updateBottomButton(vd) {
   const btn = document.getElementById('nextRoundBtn');
   if (vd.isCurrent) {
     btn.textContent = 'Seuraava kierros';
-    btn.disabled = !vd.round.matches.every(m => m.winner !== null);
+    // Tarkistetaan, että jokaisella kentällä on eksplisiittisesti voittaja (0 tai 1).
+    // Tämä estää napin aktivoitumisen, jos Firebase on poistanut null-arvot.
+    btn.disabled = !vd.round.matches.every(m => m.winner === 0 || m.winner === 1);
   } else {
     btn.textContent = 'Palaa nykyiseen kierrokseen';
     btn.disabled = false;
@@ -830,8 +843,8 @@ function openScoreModal(vd, matchIdx) {
     `Kenttä ${matchIdx + 1}${vd.isCurrent ? '' : ' (mennyt kierros)'} — syötä pisteet`;
   document.getElementById('scorePair1Label').textContent = m.p1.map(i => state.players[i].name).join(' + ');
   document.getElementById('scorePair2Label').textContent = m.p2.map(i => state.players[i].name).join(' + ');
-  document.getElementById('score1Input').value = m.score1 !== null ? m.score1 : '';
-  document.getElementById('score2Input').value = m.score2 !== null ? m.score2 : '';
+  document.getElementById('score1Input').value = typeof m.score1 === 'number' ? m.score1 : '';
+  document.getElementById('score2Input').value = typeof m.score2 === 'number' ? m.score2 : '';
   document.getElementById('scoreError').textContent = '';
   document.getElementById('scoreModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('score1Input').focus(), 100);
@@ -865,7 +878,9 @@ async function nextRound() {
   try {
     await runTransaction(stateRef, (current) => {
       if (!current || !current.currentRound) return current;
-      if (!current.currentRound.matches.every(m => m.winner !== null && m.winner !== undefined)) return current;
+      // Varmistetaan, että kaikilla on voittaja (0 tai 1)
+      if (!current.currentRound.matches.every(m => m.winner === 0 || m.winner === 1)) return current;
+      
       const lastSitOuts = current.currentRound.sitOuts || [];
       const allRounds = [...(current.rounds || []), current.currentRound];
       const gen = generateRoundForState({
@@ -941,9 +956,9 @@ function formatPairs(m) {
 }
 
 function formatScore(m) {
-  if (m.winner === null) return '—';
-  const s1 = m.score1 !== null ? m.score1 : '?';
-  const s2 = m.score2 !== null ? m.score2 : '?';
+  if (m.winner !== 0 && m.winner !== 1) return '—';
+  const s1 = typeof m.score1 === 'number' ? m.score1 : '?';
+  const s2 = typeof m.score2 === 'number' ? m.score2 : '?';
   return `${s1}–${s2}`;
 }
 
