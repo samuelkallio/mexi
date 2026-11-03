@@ -44,7 +44,6 @@
   .sitout-banner b { color: #a86a00; }
   .past-banner { background: #fff8e0; border: 1px solid #ffe4a0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85em; color: #7a5a00; }
 
-  /* Kompakti kenttänäkymä */
   .court-list { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 12px; }
   .court-row { display: flex; align-items: stretch; border-bottom: 1px solid #eee; min-height: 64px; }
   .court-row:last-child { border-bottom: none; }
@@ -54,7 +53,6 @@
   .compact-pair.winner { background: #e5f7ea; color: #146c34; font-weight: 700; }
   .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   
-  /* Kiinteä leveys tuloskentälle */
   .compact-score { 
     display: flex; align-items: center; justify-content: center; 
     width: 70px; flex-shrink: 0; 
@@ -183,6 +181,17 @@
       <div class="helper" id="playerCountHelper">0 pelaajaa</div>
     </div>
     <div class="card">
+      <h2 style="margin-top:0">Paritustyyppi</h2>
+      <div class="radio-row">
+        <label><input type="radio" name="pairingType" value="mexicano"><span>Mexicano</span></label>
+        <label><input type="radio" name="pairingType" value="koc"><span>King of the Court</span></label>
+      </div>
+      <div class="helper" style="margin-top:8px">
+        <div id="mexicanoInfo">Mexicano: pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan taulukon mukaisesti.</div>
+        <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat.</div>
+      </div>
+    </div>
+    <div class="card" id="mexicanoPairingCard">
       <h2 style="margin-top:0">Paritus</h2>
       <div class="radio-row">
         <label><input type="radio" name="pairingMode" value="1+4"><span>1+4 vs 2+3</span></label>
@@ -359,6 +368,7 @@ let pairingEditorState = null;
 
 let state = {
   players: [],
+  pairingType: 'mexicano',
   pairingMode: '1+4',
   scoringMode: 'score',
   winningScore: 11,
@@ -466,7 +476,6 @@ function setsEqual(a, b) {
   return true;
 }
 
-// Uusi pistelaskenta: voittaja saa aina winningScoren, häviäjä max(0, winningScore - erotus)
 function calcStatPoints(match, winningScore, scoringMode) {
   if (match.winner !== 0 && match.winner !== 1) return { p1: 0, p2: 0 };
   if (scoringMode === 'win') {
@@ -611,6 +620,7 @@ function attachEventListener() {
 
       if (s) {
         state.players = s.players || [];
+        state.pairingType = s.pairingType || 'mexicano';
         state.pairingMode = s.pairingMode || '1+4';
         state.scoringMode = s.scoringMode || 'win';
         state.winningScore = typeof s.winningScore === 'number' ? s.winningScore : 11;
@@ -655,6 +665,107 @@ function attachEventListener() {
 // Kierroksen generointi
 // ============================================================
 function generateRoundForState(st, existingRounds) {
+  if (st.pairingType === 'koc') {
+    return generateKocRound(st, existingRounds);
+  }
+  return generateMexicanoRound(st, existingRounds);
+}
+
+// ----- KoC -----
+function computeKocLevels(playerCount, rounds, courts) {
+  let levels = Array.from({ length: playerCount }, (_, i) =>
+    Math.min(courts, Math.floor(i / 4) + 1));
+  for (const round of rounds) {
+    const newLevels = [...levels];
+    for (let ci = 0; ci < round.matches.length; ci++) {
+      const m = round.matches[ci];
+      const courtNum = ci + 1;
+      if (m.winner === 0 || m.winner === 1) {
+        const winPair = m.winner === 0 ? m.p1 : m.p2;
+        const losePair = m.winner === 0 ? m.p2 : m.p1;
+        for (const idx of winPair) newLevels[idx] = Math.max(1, courtNum - 1);
+        for (const idx of losePair) newLevels[idx] = Math.min(courts, courtNum + 1);
+      }
+    }
+    levels = newLevels;
+  }
+  return levels;
+}
+
+function deriveFromCourt(playerIdx, rounds, fallbackLevel) {
+  for (let r = rounds.length - 1; r >= 0; r--) {
+    const round = rounds[r];
+    for (let ci = 0; ci < round.matches.length; ci++) {
+      const m = round.matches[ci];
+      if (m.p1.includes(playerIdx) || m.p2.includes(playerIdx)) {
+        return ci + 1;
+      }
+    }
+  }
+  return fallbackLevel;
+}
+
+function generateKocRound(st, existingRounds) {
+  const n = st.players.length;
+  const courts = st.courts;
+  const sitOutCount = n - courts * 4;
+  if (sitOutCount < 0) return null;
+
+  const levels = computeKocLevels(n, existingRounds, courts);
+
+  const counts = new Array(n).fill(0);
+  for (const r of existingRounds) {
+    for (const idx of r.sitOuts) counts[idx]++;
+  }
+  const isNewCycle = counts.every(c => c === counts[0]);
+  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n)
+    ? st.tiebreakOrder.slice() : null;
+  if (isNewCycle || !tiebreakOrder) {
+    const all = Array.from({ length: n }, (_, i) => i);
+    for (let i = all.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [all[i], all[j]] = [all[j], all[i]];
+    }
+    const lastSit = st.lastRoundSitOuts || [];
+    const others = all.filter(i => !lastSit.includes(i));
+    const recent = all.filter(i => lastSit.includes(i));
+    tiebreakOrder = [...others, ...recent];
+  }
+  const tiePos = new Array(n);
+  for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
+  const sorted = Array.from({ length: n }, (_, i) => i);
+  sorted.sort((a, b) => {
+    if (counts[a] !== counts[b]) return counts[a] - counts[b];
+    return tiePos[a] - tiePos[b];
+  });
+
+  const sitOutIndices = sorted.slice(0, sitOutCount);
+  const playing = sorted.slice(sitOutCount);
+
+  playing.sort((a, b) => levels[a] - levels[b] || a - b);
+
+  const matches = [];
+  for (let c = 0; c < courts; c++) {
+    const group = playing.slice(c * 4, c * 4 + 4);
+    if (group.length < 4) {
+      matches.push({ p1: group.slice(0, 2), p2: group.slice(2, 4), winner: null, score1: null, score2: null });
+      continue;
+    }
+    const infos = group.map(idx => ({ idx, from: deriveFromCourt(idx, existingRounds, levels[idx]) }));
+    infos.sort((a, b) => {
+      if (a.from !== b.from) return a.from - b.from;
+      return a.idx - b.idx;
+    });
+    const p1 = [infos[0].idx, infos[2].idx];
+    const p2 = [infos[1].idx, infos[3].idx];
+    matches.push({ p1, p2, winner: null, score1: null, score2: null });
+  }
+
+  return { sitOuts: sitOutIndices, matches, tiebreakOrder };
+}
+
+// ----- Mexicano -----
+function generateMexicanoRound(st, existingRounds) {
   const n = st.players.length;
   const sitOutCount = n - st.courts * 4;
   if (sitOutCount < 0) return null;
@@ -746,6 +857,8 @@ function computeStats() {
 // ============================================================
 function renderSetup() {
   document.getElementById('playersInput').value = state.players.map(p => p.name).join('\n');
+  const pt = document.querySelector(`input[name="pairingType"][value="${state.pairingType || 'mexicano'}"]`);
+  if (pt) pt.checked = true;
   const pr = document.querySelector(`input[name="pairingMode"][value="${state.pairingMode}"]`);
   if (pr) pr.checked = true;
   const sr = document.querySelector(`input[name="scoringMode"][value="${state.scoringMode}"]`);
@@ -753,6 +866,7 @@ function renderSetup() {
 
   document.getElementById('courtsInput').value = state.courts;
   document.getElementById('winningScoreInput').value = state.winningScore;
+  updatePairingTypeVisibility();
   updateWinningScoreVisibility();
 
   document.getElementById('setupEventInfo').textContent = 'Tapahtuma ' + eventCode;
@@ -766,6 +880,13 @@ function renderSetup() {
 
 function parsePlayers(text) {
   return text.split('\n').map(s => s.trim()).filter(Boolean).map(name => ({ name }));
+}
+
+function updatePairingTypeVisibility() {
+  const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
+  document.getElementById('mexicanoPairingCard').classList.toggle('hidden', type !== 'mexicano');
+  document.getElementById('mexicanoInfo').classList.toggle('hidden', type !== 'mexicano');
+  document.getElementById('kocInfo').classList.toggle('hidden', type !== 'koc');
 }
 
 function updateWinningScoreVisibility() {
@@ -798,6 +919,7 @@ async function applySettings() {
   errEl.textContent = '';
   const names = parsePlayers(document.getElementById('playersInput').value);
   if (names.length < 4) { errEl.textContent = 'Tarvitaan vähintään 4 pelaajaa.'; return; }
+  const pairingType = document.querySelector('input[name="pairingType"]:checked').value;
   const pairingMode = document.querySelector('input[name="pairingMode"]:checked').value;
   const scoringMode = document.querySelector('input[name="scoringMode"]:checked').value;
   const courts = parseInt(document.getElementById('courtsInput').value, 10);
@@ -810,6 +932,7 @@ async function applySettings() {
 
   const playersChanged = JSON.stringify(names.map(p => p.name)) !==
                          JSON.stringify(state.players.map(p => p.name));
+  const pairingTypeChanged = (state.pairingType || 'mexicano') !== pairingType;
   const courtsChanged = state.courts !== courts;
   const pairingChanged = state.pairingMode !== pairingMode;
   const scoringModeChanged = state.scoringMode !== scoringMode;
@@ -824,6 +947,10 @@ async function applySettings() {
       if (!confirm('Pelaajalista on muuttunut. Tämä nollaa kierrokset ja tilastot. Jatketaanko?')) return;
       resetRounds = true;
       regenerateCurrent = true;
+    } else if (pairingTypeChanged) {
+      if (!confirm('Paritustyypin muutos nollaa kierrokset. Jatketaanko?')) return;
+      resetRounds = true;
+      regenerateCurrent = true;
     } else if (courtsChanged || pairingChanged) {
       if (anyResults && !confirm('Asetukset muuttuivat. Nykyisen kierroksen tulokset menetetään. Jatketaanko?')) return;
       regenerateCurrent = true;
@@ -834,6 +961,7 @@ async function applySettings() {
 
   const newState = {
     players: names,
+    pairingType,
     pairingMode,
     scoringMode,
     winningScore,
@@ -847,7 +975,7 @@ async function applySettings() {
     if (!resetRounds && state.currentRound) lastSitOuts = state.currentRound.sitOuts || [];
     else if (!resetRounds && state.rounds.length > 0) lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
     const gen = generateRoundForState({
-      players: names, pairingMode, courts,
+      players: names, pairingType, pairingMode, courts,
       scoringMode, winningScore,
       tiebreakOrder: [], lastRoundSitOuts: lastSitOuts,
     }, newState.rounds);
@@ -864,6 +992,7 @@ async function applySettings() {
     await set(ref(db, `events/${eventCode}/state`), newState);
     hideLoading();
     state.players = newState.players;
+    state.pairingType = newState.pairingType;
     state.pairingMode = newState.pairingMode;
     state.scoringMode = newState.scoringMode;
     state.winningScore = newState.winningScore;
@@ -881,7 +1010,7 @@ async function applySettings() {
 }
 
 // ============================================================
-// Päänäkymä (Kompakti)
+// Päänäkymä
 // ============================================================
 function getViewData() {
   if (state.viewIdx === null || state.viewIdx >= state.rounds.length) {
@@ -895,7 +1024,7 @@ function renderMain() {
   if (!vd.round) return;
 
   document.getElementById('mainTitle').textContent =
-    `Mexicano · ${state.players.length} pelaajaa · ${eventCode}`;
+    `${state.pairingType === 'koc' ? 'King of the Court' : 'Mexicano'} · ${state.players.length} pelaajaa · ${eventCode}`;
   document.getElementById('roundInfo').textContent =
     `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`;
 
@@ -945,7 +1074,6 @@ function renderMain() {
   });
 
   container.appendChild(list);
-
   updateBottomButton(vd);
 }
 
@@ -1077,7 +1205,7 @@ async function saveScoreModal() {
 }
 
 // ============================================================
-// Parinvaihto-editori (vain aktiiviselle kierrokselle)
+// Parinvaihto-editori
 // ============================================================
 function openPairingEditor() {
   const round = state.currentRound;
@@ -1221,7 +1349,6 @@ async function savePairingEditor() {
   showLoading('Tallennetaan...');
   try {
     for (const u of updates) {
-      // set() korvaa koko solmun → vanha winner/score poistuu automaattisesti
       await set(ref(db, `events/${eventCode}/state/currentRound/matches/${u.i}`), {
         p1: u.p1,
         p2: u.p2,
@@ -1252,6 +1379,7 @@ async function nextRound() {
       const allRounds = [...(current.rounds || []), current.currentRound];
       const gen = generateRoundForState({
         players: current.players,
+        pairingType: current.pairingType || 'mexicano',
         pairingMode: current.pairingMode,
         courts: current.courts,
         scoringMode: current.scoringMode,
@@ -1535,6 +1663,9 @@ document.getElementById('courtsInput').addEventListener('input', () => {
   updateSetupHelpers();
 });
 
+document.querySelectorAll('input[name="pairingType"]').forEach(r => {
+  r.addEventListener('change', updatePairingTypeVisibility);
+});
 document.querySelectorAll('input[name="scoringMode"]').forEach(r => {
   r.addEventListener('change', updateWinningScoreVisibility);
 });
@@ -1556,90 +1687,4 @@ document.getElementById('nextRoundArrowBtn').addEventListener('click', goForward
 
 document.getElementById('nextRoundBtn').addEventListener('click', () => {
   if (state.viewIdx === null) nextRound();
-  else { state.viewIdx = null; renderMain(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-});
-
-document.getElementById('shareBtn').addEventListener('click', openShareModal);
-document.getElementById('settingsBtn').addEventListener('click', () => {
-  showScreen('setup');
-  renderSetup();
-});
-document.getElementById('resultsBtn').addEventListener('click', () => {
-  renderResults();
-  showScreen('results');
-});
-document.getElementById('backFromResultsBtn').addEventListener('click', () => {
-  showScreen('main');
-  renderMain();
-});
-document.getElementById('resultsQrBtn').addEventListener('click', openShareModal);
-
-document.getElementById('historyBtn').addEventListener('click', () => {
-  renderHistoryScreen();
-  showScreen('history');
-});
-document.getElementById('backFromHistoryBtn').addEventListener('click', () => {
-  showScreen('results');
-  renderResults();
-});
-document.getElementById('historyFilter').addEventListener('change', renderHistoryTable);
-
-document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
-document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
-document.getElementById('scoreModal').addEventListener('click', (e) => {
-  if (e.target.id === 'scoreModal') closeScoreModal();
-});
-
-// Parinvaihto-editori
-document.getElementById('editPairingBtn').addEventListener('click', openPairingEditor);
-document.getElementById('pairingEditorCancelBtn').addEventListener('click', closePairingEditor);
-document.getElementById('pairingEditorSaveBtn').addEventListener('click', savePairingEditor);
-document.getElementById('pairingEditorContent').addEventListener('click', handlePairingEditorClick);
-document.getElementById('pairingEditorModal').addEventListener('click', (e) => {
-  if (e.target.id === 'pairingEditorModal') closePairingEditor();
-});
-
-document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
-document.getElementById('shareCopyBtn').addEventListener('click', copyShareLink);
-document.getElementById('shareModal').addEventListener('click', (e) => {
-  if (e.target.id === 'shareModal') closeShareModal();
-});
-
-window.addEventListener('popstate', () => {
-  const params = new URLSearchParams(location.search);
-  const code = params.get('event');
-  if (code && code.toUpperCase() !== eventCode) {
-    eventCode = code.toUpperCase();
-    state.viewIdx = null;
-    showScreen('none');
-    state.screen = 'initializing';
-    attachEventListener();
-  } else if (!code && eventCode) {
-    exitEvent();
-  }
-});
-
-// ============================================================
-// Käynnistys
-// ============================================================
-(function init() {
-  const params = new URLSearchParams(location.search);
-  const code = params.get('event');
-  if (code) {
-    const upper = code.toUpperCase();
-    if (isValidCode(upper)) {
-      eventCode = upper;
-      showScreen('none');
-      state.screen = 'initializing';
-      attachEventListener();
-      return;
-    } else {
-      history.replaceState({}, '', location.pathname);
-    }
-  }
-  state.screen = 'landing';
-  showScreen('landing');
-})();
-</script>
-</body>
-</html>
+ 
