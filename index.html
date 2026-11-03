@@ -1687,4 +1687,89 @@ document.getElementById('nextRoundArrowBtn').addEventListener('click', goForward
 
 document.getElementById('nextRoundBtn').addEventListener('click', () => {
   if (state.viewIdx === null) nextRound();
- 
+  else { state.viewIdx = null; renderMain(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+});
+
+document.getElementById('shareBtn').addEventListener('click', openShareModal);
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  showScreen('setup');
+  renderSetup();
+});
+document.getElementById('resultsBtn').addEventListener('click', () => {
+  renderResults();
+  showScreen('results');
+});
+document.getElementById('backFromResultsBtn').addEventListener('click', () => {
+  showScreen('main');
+  renderMain();
+});
+document.getElementById('resultsQrBtn').addEventListener('click', openShareModal);
+
+document.getElementById('historyBtn').addEventListener('click', () => {
+  renderHistoryScreen();
+  showScreen('history');
+});
+document.getElementById('backFromHistoryBtn').addEventListener('click', () => {
+  showScreen('results');
+  renderResults();
+});
+document.getElementById('historyFilter').addEventListener('change', renderHistoryTable);
+
+document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
+document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
+document.getElementById('scoreModal').addEventListener('click', (e) => {
+  if (e.target.id === 'scoreModal') closeScoreModal();
+});
+
+document.getElementById('editPairingBtn').addEventListener('click', openPairingEditor);
+document.getElementById('pairingEditorCancelBtn').addEventListener('click', closePairingEditor);
+document.getElementById('pairingEditorSaveBtn').addEventListener('click', savePairingEditor);
+document.getElementById('pairingEditorContent').addEventListener('click', handlePairingEditorClick);
+document.getElementById('pairingEditorModal').addEventListener('click', (e) => {
+  if (e.target.id === 'pairingEditorModal') closePairingEditor();
+});
+
+document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
+document.getElementById('shareCopyBtn').addEventListener('click', copyShareLink);
+document.getElementById('shareModal').addEventListener('click', (e) => {
+  if (e.target.id === 'shareModal') closeShareModal();
+});
+
+window.addEventListener('popstate', () => {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('event');
+  if (code && code.toUpperCase() !== eventCode) {
+    eventCode = code.toUpperCase();
+    state.viewIdx = null;
+    showScreen('none');
+    state.screen = 'initializing';
+    attachEventListener();
+  } else if (!code && eventCode) {
+    exitEvent();
+  }
+});
+
+// ============================================================
+// Käynnistys
+// ============================================================
+(function init() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('event');
+  if (code) {
+    const upper = code.toUpperCase();
+    if (isValidCode(upper)) {
+      eventCode = upper;
+      showScreen('none');
+      state.screen = 'initializing';
+      attachEventListener();
+      return;
+    } else {
+      history.replaceState({}, '', location.pathname);
+    }
+  }
+  state.screen = 'landing';
+  showScreen('landing');
+})();
+</script>
+</body>
+</html>
