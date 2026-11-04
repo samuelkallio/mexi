@@ -17,7 +17,8 @@
   input[type=text], input[type=number], textarea, select { width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px; background: #fff; font-family: inherit; -webkit-appearance: none; }
   textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, monospace; }
   .radio-row { display: flex; gap: 8px; }
-  .radio-row label { flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center; background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9em; display: flex; align-items: center; justify-content: center; min-height: 48px; transition: all 0.15s; }
+  .radio-row.three { gap: 6px; }
+  .radio-row label { flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center; background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.85em; display: flex; align-items: center; justify-content: center; min-height: 48px; transition: all 0.15s; }
   .radio-row input { display: none; }
   .radio-row label:has(input:checked) { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; }
   button { font-family: inherit; font-size: 1em; border: none; border-radius: 12px; padding: 14px 20px; cursor: pointer; font-weight: 600; transition: transform 0.1s, opacity 0.1s; }
@@ -115,7 +116,6 @@
   .btn-join { background: #4a5df9; color: white; }
   .btn-delete { background: #fee; color: #c33; padding: 8px 12px; }
 
-  /* Parinvaihto-editori */
   .pe-court { margin-bottom: 14px; }
   .pe-court:last-child { margin-bottom: 0; }
   .pe-court-label { font-size: 0.75em; text-transform: uppercase; color: #666; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.5px; }
@@ -182,12 +182,14 @@
     </div>
     <div class="card">
       <h2 style="margin-top:0">Paritustyyppi</h2>
-      <div class="radio-row">
+      <div class="radio-row three">
         <label><input type="radio" name="pairingType" value="mexicano"><span>Mexicano</span></label>
+        <label><input type="radio" name="pairingType" value="americano"><span>Americano</span></label>
         <label><input type="radio" name="pairingType" value="koc"><span>King of the Court</span></label>
       </div>
       <div class="helper" style="margin-top:8px">
         <div id="mexicanoInfo">Mexicano: pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan taulukon mukaisesti.</div>
+        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan. Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen samojen erien toistumisen välttämiseksi.</div>
         <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat.</div>
       </div>
     </div>
@@ -357,6 +359,174 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // ============================================================
+// Americano-pelikaaviot
+// Jokainen matsi: [p1a, p1b, p2a, p2b] (kirjainindeksit A=0, B=1, ...)
+// Jokainen kierros: lista matseja (yksi per kenttä)
+// Jokainen kaavio: lista kierroksia
+// ============================================================
+const AMERICANO_SCHEDULES = {
+  4: [
+    [[0,2,3,1]],
+    [[1,2,0,3]],
+    [[2,3,1,0]],
+    [[3,1,0,2]],
+    [[0,3,1,2]],
+    [[1,0,2,3]],
+  ],
+  5: [
+    [[0,4,3,1]],
+    [[1,2,4,3]],
+    [[3,0,2,4]],
+    [[4,1,0,2]],
+    [[2,3,1,0]],
+    [[1,0,4,2]],
+    [[2,3,0,4]],
+    [[4,1,3,0]],
+    [[0,2,1,3]],
+    [[3,4,2,1]],
+    [[2,1,0,3]],
+    [[3,4,1,0]],
+    [[0,2,4,1]],
+    [[1,3,2,4]],
+    [[4,0,3,2]],
+  ],
+  6: [
+    [[3,4,0,5]],
+    [[2,5,1,4]],
+    [[0,2,3,5]],
+    [[1,4,2,3]],
+    [[1,5,0,4]],
+    [[0,3,2,5]],
+    [[2,4,0,1]],
+    [[1,3,4,5]],
+    [[1,2,0,5]],
+    [[3,5,2,4]],
+    [[0,3,1,2]],
+    [[4,5,0,1]],
+    [[0,2,3,4]],
+    [[1,5,2,3]],
+    [[0,4,1,3]],
+  ],
+  7: [
+    [[6,4,3,5]],
+    [[5,1,0,4]],
+    [[4,2,6,1]],
+    [[1,3,5,2]],
+    [[2,0,4,3]],
+    [[3,6,1,0]],
+    [[0,5,2,6]],
+  ],
+  8: [
+    [[7,6,5,2],[1,0,3,4]],
+    [[6,3,7,4],[2,1,5,0]],
+    [[7,2,4,1],[3,0,6,5]],
+    [[4,6,1,5],[0,2,3,7]],
+    [[0,4,2,6],[5,7,1,3]],
+    [[2,3,6,1],[4,5,7,0]],
+    [[3,5,4,2],[1,7,0,6]],
+  ],
+  9: [
+    [[1,2,3,6],[4,8,5,7]],
+    [[2,0,4,7],[5,6,3,8]],
+    [[0,1,5,8],[3,7,4,6]],
+    [[4,5,6,0],[7,2,8,1]],
+    [[5,3,7,1],[8,0,6,2]],
+    [[3,4,8,2],[6,1,7,0]],
+    [[7,8,0,3],[1,5,2,4]],
+    [[8,6,1,4],[2,3,0,5]],
+    [[6,7,2,5],[0,4,1,3]],
+  ],
+  10: [
+    [[3,5,4,9],[1,2,6,8]],
+    [[9,8,7,5],[2,0,1,3]],
+    [[8,4,9,1],[7,0,3,6]],
+    [[1,7,2,9],[4,3,0,5]],
+    [[5,8,0,6],[1,4,7,3]],
+    [[0,3,1,8],[2,5,9,6]],
+    [[4,0,8,2],[6,7,5,1]],
+    [[3,9,6,1],[5,4,8,7]],
+    [[4,6,9,0],[3,8,7,2]],
+    [[6,2,4,7],[0,1,5,9]],
+    [[5,6,2,3],[9,7,8,0]],
+  ],
+  11: [
+    [[3,1,0,9],[6,5,4,7]],
+    [[10,7,2,8],[1,4,5,3]],
+    [[4,2,7,1],[9,8,0,6]],
+    [[3,6,5,10],[2,0,8,4]],
+    [[0,5,6,2],[1,10,7,9]],
+    [[4,9,8,3],[5,7,10,0]],
+    [[7,8,9,5],[2,3,6,1]],
+    [[0,1,10,4],[8,6,3,7]],
+    [[6,10,1,8],[5,4,9,2]],
+    [[7,2,3,0],[10,9,4,6]],
+    [[9,3,2,10],[8,0,1,5]],
+  ],
+  12: [
+    [[4,6,8,9],[11,0,1,7],[2,5,3,10]],
+    [[11,3,4,10],[5,8,6,2],[7,9,0,1]],
+    [[8,0,9,5],[10,1,3,4],[11,6,7,2]],
+    [[2,4,6,7],[11,9,10,5],[0,3,1,8]],
+    [[11,1,2,8],[3,6,4,0],[5,7,9,10]],
+    [[6,9,7,3],[8,10,1,2],[11,4,5,0]],
+    [[0,2,4,5],[11,7,8,3],[9,1,10,6]],
+    [[11,10,0,6],[1,4,2,9],[3,5,7,8]],
+    [[4,7,5,1],[6,8,10,0],[11,2,3,9]],
+    [[9,0,2,3],[11,5,6,1],[7,10,8,4]],
+    [[11,8,9,4],[10,2,0,7],[1,3,5,6]],
+  ],
+  13: [
+    [[4,12,10,7],[1,8,3,11],[5,9,6,2]],
+    [[1,0,6,9],[3,12,5,8],[10,11,2,7]],
+    [[3,4,2,11],[5,0,10,12],[6,8,7,9]],
+    [[5,1,7,8],[10,4,6,0],[2,12,9,11]],
+    [[10,3,9,12],[6,1,2,4],[7,0,11,8]],
+    [[6,5,11,0],[2,3,7,1],[9,4,8,12]],
+    [[2,10,8,4],[7,5,9,3],[11,1,12,0]],
+    [[7,6,12,1],[9,10,11,5],[8,3,0,4]],
+    [[9,2,0,3],[11,6,8,10],[12,5,4,1]],
+    [[11,7,4,5],[8,2,12,6],[0,10,1,3]],
+    [[8,9,1,10],[12,7,0,2],[4,6,3,5]],
+    [[12,11,3,6],[0,9,4,7],[1,2,5,10]],
+    [[0,8,5,2],[4,11,1,9],[3,7,10,6]],
+  ],
+  14: [
+    [[5,9,8,0],[3,2,11,1],[12,6,4,10]],
+    [[13,12,7,11],[10,3,2,0],[4,8,6,1]],
+    [[4,13,12,9],[6,10,3,11],[1,2,8,5]],
+    [[3,7,8,10],[12,0,1,9],[5,11,2,4]],
+    [[13,11,1,4],[5,6,7,8],[9,0,10,12]],
+    [[12,2,0,6],[10,9,1,13],[7,4,5,3]],
+    [[9,11,5,7],[0,3,4,6],[8,12,13,2]],
+    [[3,4,13,8],[1,12,5,10],[6,11,7,0]],
+    [[9,13,6,3],[10,7,12,4],[0,1,11,2]],
+    [[6,7,9,2],[4,5,11,10],[13,0,8,1]],
+    [[11,0,10,13],[3,1,9,7],[2,6,12,5]],
+    [[2,8,7,12],[0,10,13,5],[3,9,4,11]],
+    [[13,3,0,5],[9,4,2,7],[10,1,6,8]],
+    [[1,5,12,3],[7,13,10,2],[11,8,9,6]],
+    [[11,12,3,8],[2,5,13,6],[1,7,0,4]],
+  ],
+  15: [
+    [[1,7,2,3],[4,14,11,8],[5,9,10,12]],
+    [[2,8,3,4],[6,10,11,13],[5,0,12,9]],
+    [[7,11,12,14],[6,1,13,10],[3,9,4,5]],
+    [[4,10,5,6],[7,2,14,11],[8,12,13,0]],
+    [[5,11,6,7],[9,13,14,1],[8,3,0,12]],
+    [[10,14,0,2],[9,4,1,13],[6,12,7,8]],
+    [[7,13,8,9],[10,5,2,14],[11,0,1,3]],
+    [[8,14,9,10],[12,1,2,4],[11,6,3,0]],
+    [[13,2,3,5],[12,7,4,1],[9,0,10,11]],
+    [[10,1,11,12],[13,8,5,2],[14,3,4,6]],
+    [[11,2,12,13],[0,4,5,7],[14,9,6,3]],
+    [[1,5,6,8],[0,10,7,4],[12,3,13,14]],
+    [[13,4,14,0],[1,11,8,5],[2,6,7,9]],
+    [[14,5,0,1],[3,7,8,10],[2,12,9,6]],
+    [[4,8,9,11],[3,13,10,7],[0,6,1,2]],
+  ],
+};
+
+// ============================================================
 // Tila
 // ============================================================
 let eventCode = null;
@@ -376,6 +546,8 @@ let state = {
   rounds: [],
   currentRound: null,
   tiebreakOrder: [],
+  americanoMapping: null,
+  americanoBlock: 0,
   viewIdx: null,
   screen: 'landing'
 };
@@ -596,6 +768,7 @@ function exitEvent() {
   history.pushState({}, '', url.toString());
   state.players = []; state.rounds = []; state.currentRound = null;
   state.tiebreakOrder = []; state.viewIdx = null;
+  state.americanoMapping = null; state.americanoBlock = 0;
   state.screen = 'landing';
   showScreen('landing');
   setLandingError('');
@@ -628,6 +801,8 @@ function attachEventListener() {
         state.rounds = s.rounds || [];
         state.currentRound = s.currentRound || null;
         state.tiebreakOrder = s.tiebreakOrder || [];
+        state.americanoMapping = s.americanoMapping || null;
+        state.americanoBlock = typeof s.americanoBlock === 'number' ? s.americanoBlock : 0;
       }
       if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) {
         state.viewIdx = null;
@@ -665,10 +840,59 @@ function attachEventListener() {
 // Kierroksen generointi
 // ============================================================
 function generateRoundForState(st, existingRounds) {
-  if (st.pairingType === 'koc') {
-    return generateKocRound(st, existingRounds);
+  if (st.pairingType === 'koc') return generateKocRound(st, existingRounds);
+  if (st.pairingType === 'americano') {
+    const gen = generateAmericanoRound(st, existingRounds);
+    if (gen) return gen;
   }
   return generateMexicanoRound(st, existingRounds);
+}
+
+// ----- Americano -----
+function generateAmericanoRound(st, existingRounds) {
+  const n = st.players.length;
+  const schedule = AMERICANO_SCHEDULES[n];
+  if (!schedule) return null;
+
+  const scheduleLen = schedule.length;
+  const roundInBlock = existingRounds.length % scheduleLen;
+  const currentBlock = Math.floor(existingRounds.length / scheduleLen);
+
+  let mapping;
+  if (st.americanoMapping && st.americanoBlock === currentBlock &&
+      st.americanoMapping.length === n) {
+    mapping = st.americanoMapping.slice();
+  } else if (currentBlock === 0) {
+    mapping = Array.from({ length: n }, (_, i) => i);
+  } else {
+    mapping = Array.from({ length: n }, (_, i) => i);
+    for (let i = mapping.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [mapping[i], mapping[j]] = [mapping[j], mapping[i]];
+    }
+  }
+
+  const roundSchedule = schedule[roundInBlock];
+  const matches = roundSchedule.map(md => ({
+    p1: [mapping[md[0]], mapping[md[1]]],
+    p2: [mapping[md[2]], mapping[md[3]]],
+    winner: null, score1: null, score2: null,
+  }));
+
+  const playingSet = new Set();
+  for (const m of matches) {
+    for (const pi of [...m.p1, ...m.p2]) playingSet.add(pi);
+  }
+  const sitOuts = [];
+  for (let i = 0; i < n; i++) if (!playingSet.has(i)) sitOuts.push(i);
+
+  return {
+    sitOuts,
+    matches,
+    tiebreakOrder: st.tiebreakOrder || Array.from({ length: n }, (_, i) => i),
+    americanoMapping: mapping,
+    americanoBlock: currentBlock,
+  };
 }
 
 // ----- KoC -----
@@ -886,12 +1110,19 @@ function updatePairingTypeVisibility() {
   const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
   document.getElementById('mexicanoPairingCard').classList.toggle('hidden', type !== 'mexicano');
   document.getElementById('mexicanoInfo').classList.toggle('hidden', type !== 'mexicano');
+  document.getElementById('americanoInfo').classList.toggle('hidden', type !== 'americano');
   document.getElementById('kocInfo').classList.toggle('hidden', type !== 'koc');
+  updateSetupHelpers();
 }
 
 function updateWinningScoreVisibility() {
   const mode = document.querySelector('input[name="scoringMode"]:checked')?.value || 'score';
   document.getElementById('winningScoreRow').classList.toggle('hidden', mode !== 'score');
+}
+
+function getScheduleCourts(playerCount) {
+  const sched = AMERICANO_SCHEDULES[playerCount];
+  return sched ? sched[0].length : null;
 }
 
 function updateSetupHelpers() {
@@ -900,6 +1131,27 @@ function updateSetupHelpers() {
   document.getElementById('playerCountHelper').textContent = `${n} pelaajaa`;
   const maxCourts = Math.max(1, Math.floor(n / 4));
   const ci = document.getElementById('courtsInput');
+  const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
+
+  if (type === 'americano') {
+    const schedCourts = getScheduleCourts(n);
+    if (schedCourts !== null) {
+      ci.value = schedCourts;
+      ci.max = schedCourts;
+      ci.disabled = true;
+      document.getElementById('courtsHelper').textContent =
+        `Americano: ${schedCourts} kenttää (kaavion mukainen)`;
+    } else {
+      ci.disabled = false;
+      ci.max = maxCourts;
+      document.getElementById('courtsHelper').textContent = n > 15
+        ? 'Americano-taulukko on 4–15 pelaajalle. Käytetään Mexicanoa.'
+        : 'Tarvitaan vähintään 4 pelaajaa';
+    }
+    return;
+  }
+
+  ci.disabled = false;
   ci.max = maxCourts;
   document.getElementById('courtsHelper').textContent = n >= 4
     ? `Max ${maxCourts} kenttää (${maxCourts * 4} pelaajaa)`
@@ -922,9 +1174,14 @@ async function applySettings() {
   const pairingType = document.querySelector('input[name="pairingType"]:checked').value;
   const pairingMode = document.querySelector('input[name="pairingMode"]:checked').value;
   const scoringMode = document.querySelector('input[name="scoringMode"]:checked').value;
-  const courts = parseInt(document.getElementById('courtsInput').value, 10);
+  let courts = parseInt(document.getElementById('courtsInput').value, 10);
   const winningScoreRaw = parseInt(document.getElementById('winningScoreInput').value, 10);
   const winningScore = isNaN(winningScoreRaw) || winningScoreRaw < 0 ? 0 : winningScoreRaw;
+
+  // Americano: käytä kaavion kenttämäärää
+  if (pairingType === 'americano' && AMERICANO_SCHEDULES[names.length]) {
+    courts = AMERICANO_SCHEDULES[names.length][0].length;
+  }
 
   const maxCourts = Math.floor(names.length / 4);
   if (isNaN(courts) || courts < 1) { errEl.textContent = 'Kenttiä oltava vähintään 1.'; return; }
@@ -974,17 +1231,30 @@ async function applySettings() {
     let lastSitOuts = [];
     if (!resetRounds && state.currentRound) lastSitOuts = state.currentRound.sitOuts || [];
     else if (!resetRounds && state.rounds.length > 0) lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
-    const gen = generateRoundForState({
+    const stForGen = {
       players: names, pairingType, pairingMode, courts,
       scoringMode, winningScore,
-      tiebreakOrder: [], lastRoundSitOuts: lastSitOuts,
-    }, newState.rounds);
+      tiebreakOrder: resetRounds ? [] : state.tiebreakOrder,
+      lastRoundSitOuts: lastSitOuts,
+      americanoMapping: resetRounds ? null : state.americanoMapping,
+      americanoBlock: resetRounds ? 0 : state.americanoBlock,
+    };
+    const gen = generateRoundForState(stForGen, newState.rounds);
     if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui. Tarkista pelaajamäärä ja kentät.'; return; }
     newState.currentRound = { sitOuts: gen.sitOuts, matches: gen.matches };
     newState.tiebreakOrder = gen.tiebreakOrder;
+    if (gen.americanoMapping !== undefined) {
+      newState.americanoMapping = gen.americanoMapping;
+      newState.americanoBlock = gen.americanoBlock;
+    } else {
+      newState.americanoMapping = resetRounds ? null : (state.americanoMapping || null);
+      newState.americanoBlock = resetRounds ? 0 : (state.americanoBlock || 0);
+    }
   } else {
     newState.currentRound = state.currentRound;
     newState.tiebreakOrder = state.tiebreakOrder;
+    newState.americanoMapping = state.americanoMapping;
+    newState.americanoBlock = state.americanoBlock;
   }
 
   showLoading('Tallennetaan...');
@@ -1000,6 +1270,8 @@ async function applySettings() {
     state.rounds = newState.rounds;
     state.currentRound = newState.currentRound;
     state.tiebreakOrder = newState.tiebreakOrder;
+    state.americanoMapping = newState.americanoMapping || null;
+    state.americanoBlock = newState.americanoBlock || 0;
     state.viewIdx = null;
     showScreen('main');
     renderMain();
@@ -1019,12 +1291,18 @@ function getViewData() {
   return { isCurrent: false, round: state.rounds[state.viewIdx], roundNumber: state.viewIdx + 1, idx: state.viewIdx };
 }
 
+function getTypeLabel() {
+  if (state.pairingType === 'koc') return 'King of the Court';
+  if (state.pairingType === 'americano') return 'Americano';
+  return 'Mexicano';
+}
+
 function renderMain() {
   const vd = getViewData();
   if (!vd.round) return;
 
   document.getElementById('mainTitle').textContent =
-    `${state.pairingType === 'koc' ? 'King of the Court' : 'Mexicano'} · ${state.players.length} pelaajaa · ${eventCode}`;
+    `${getTypeLabel()} · ${state.players.length} pelaajaa · ${eventCode}`;
   document.getElementById('roundInfo').textContent =
     `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`;
 
@@ -1386,14 +1664,21 @@ async function nextRound() {
         winningScore: current.winningScore,
         tiebreakOrder: current.tiebreakOrder || [],
         lastRoundSitOuts: lastSitOuts,
+        americanoMapping: current.americanoMapping || null,
+        americanoBlock: typeof current.americanoBlock === 'number' ? current.americanoBlock : 0,
       }, allRounds);
       if (!gen) return current;
-      return {
+      const newState = {
         ...current,
         rounds: allRounds,
         currentRound: { sitOuts: gen.sitOuts, matches: gen.matches },
         tiebreakOrder: gen.tiebreakOrder,
       };
+      if (gen.americanoMapping !== undefined) {
+        newState.americanoMapping = gen.americanoMapping;
+        newState.americanoBlock = gen.americanoBlock;
+      }
+      return newState;
     });
     state.viewIdx = null;
     renderMain();
@@ -1659,6 +1944,8 @@ document.getElementById('joinCodeInput').addEventListener('input', (e) => {
 
 document.getElementById('playersInput').addEventListener('input', updateSetupHelpers);
 document.getElementById('courtsInput').addEventListener('input', () => {
+  const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
+  if (type === 'americano') return; // Americano ohittaa kenttämäärän
   courtsAutoManaged = false;
   updateSetupHelpers();
 });
