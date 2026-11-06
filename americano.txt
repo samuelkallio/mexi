@@ -1,0 +1,199 @@
+AMERICANO-TAULUKOT
+========================================
+Yhteensä 12 taulukkoa
+Vietty: 4.11.2026 klo 17.50.51
+
+----------------------------------------
+Taulukko 1/12: 4 pelaajaa
+Pelaajia: 4 | Kenttiä: 1 | Eriä: 6
+----------------------------------------
+1: A+C:D+B 
+2: B+C:A+D 
+3: C+D:B+A
+4: D+B:A+C
+5: A+D:B+C
+6: B+A:C+D
+
+----------------------------------------
+Taulukko 2/12: 5 pelaajaa
+Pelaajia: 5 | Kenttiä: 1 | Eriä: 15
+----------------------------------------
+ 1: B+C:E+D
+ 2: D+A:C+E
+ 3: A+E:D+B
+ 4: E+B:A+C
+ 5: C+D:B+A
+ 6: D+E:C+B
+ 7: C+D:A+E
+ 8: E+B:D+A
+ 9: B+A:E+C
+10: A+C:B+D
+11: B+D:C+E
+12: E+A:D+C
+13: D+E:B+A
+14: A+C:E+B
+15: C+B:A+D
+
+----------------------------------------
+Taulukko 3/12: 6 pelaajaa
+Pelaajia: 6 | Kenttiä: 1 | Eriä: 15
+----------------------------------------
+1: D+E:A+F
+2: C+F:B+E
+3: A+C:D+F
+4: B+E:C+D
+5: B+F:A+E
+6: A+D:C+F
+7: C+E:A+B
+8: B+D:E+F
+9: B+C:A+F
+10: D+F:C+E
+11: A+D:B+C
+12: E+F:A+B
+13: A+C:D+E
+14: B+F:C+D
+15: A+E:B+D
+
+----------------------------------------
+Taulukko 4/12: 7 pelaajaa
+Pelaajia: 7 | Kenttiä: 1 | Eriä: 7
+----------------------------------------
+1: G+E:D+F 
+2: F+B:A+E 
+3: E+C:G+B 
+4: B+D:F+C 
+5: C+A:E+D 
+6: D+G:B+A 
+7: A+F:C+G 
+
+----------------------------------------
+Taulukko 5/12: 8 pelaajaa
+Pelaajia: 8 | Kenttiä: 2 | Eriä: 7
+----------------------------------------
+1: H+G:F+C, B+A:D+E 
+2: G+D:H+E, C+B:F+A 
+3: H+C:E+B, D+A:G+F 
+4: E+G:B+F, A+C:D+H 
+5: A+E:C+G, F+H:B+D 
+6: C+D:G+B, E+F:H+A 
+7: D+F:E+C, B+H:A+G 
+
+----------------------------------------
+Taulukko 6/12: 9 pelaajaa
+Pelaajia: 9 | Kenttiä: 2 | Eriä: 9
+----------------------------------------
+ 1: B+C:D+G, E+I:F+H 
+ 2: C+A:E+H, F+G:D+I 
+ 3: A+B:F+I, D+H:E+G 
+ 4: E+F:G+A, H+C:I+B 
+ 5: F+D:H+B, I+A:G+C 
+ 6: D+E:I+C, G+B:H+A 
+ 7: H+I:A+D, B+F:C+E 
+ 8: I+G:B+E, C+D:A+F 
+ 9: G+H:C+F, A+E:B+D 
+
+----------------------------------------
+Taulukko 7/12: 10 pelaajaa
+Pelaajia: 10 | Kenttiä: 2 | Eriä: 11
+----------------------------------------
+ 1: D+F:E+J, B+C:G+I 
+ 2: J+I:H+F, C+A:B+D 
+ 3: I+E:J+B, H+A:D+G 
+ 4: B+H:C+J, E+D:A+F 
+ 5: F+I:A+G, B+E:H+D 
+ 6: A+D:B+I, C+F:J+G 
+ 7: E+A:I+C, G+H:F+B 
+ 8: D+J:G+B, F+E:I+H 
+ 9: E+G:J+A, D+I:H+C 
+10: G+C:E+H, A+B:F+J 
+11: F+G:C+D, J+H:I+A 
+
+----------------------------------------
+Taulukko 8/12: 11 pelaajaa
+Pelaajia: 11 | Kenttiä: 2 | Eriä: 11
+----------------------------------------
+1: D+B:A+J, G+F:E+H
+2: K+H:C+I, B+E:F+D
+3: E+C:H+B, J+I:A+G
+4: D+G:F+K, C+A:I+E
+5: A+F:G+C, B+K:H+J
+6: E+J:I+D, F+H:K+A
+7: H+I:J+F, C+D:G+B
+8: A+B:K+E, I+G:D+H
+9: G+K:B+I, F+E:J+C
+10: H+C:D+A, K+J:E+G
+11: J+D:C+K, I+A:B+F
+
+----------------------------------------
+Taulukko 9/12: 12 pelaajaa
+Pelaajia: 12 | Kenttiä: 3 | Eriä: 11
+----------------------------------------
+1: E+G:I+J, L+A:B+H, C+F:D+K
+2: L+D:E+K, F+I:G+C, H+J:A+B
+3: I+A:J+F, K+B:D+E, L+G:H+C
+4: C+E:G+H, L+J:K+F, A+D:B+I
+5: L+B:C+I, D+G:E+A, F+H:J+K
+6: G+J:H+D, I+K:B+C, L+E:F+A
+7: A+C:E+F, L+H:I+D, J+B:K+G
+8: L+K:A+G, B+E:C+J, D+F:H+I
+9: E+H:F+B, G+I:K+A, L+C:D+J
+10: J+A:C+D, L+F:G+B, H+K:I+E
+11: L+I:J+E, K+C:A+H, B+D:F+G
+
+----------------------------------------
+Taulukko 10/12: 13 pelaajaa
+Pelaajia: 13 | Kenttiä: 3 | Eriä: 13
+----------------------------------------
+1: E+M:K+H, B+I:D+L, F+J:G+C
+2: B+A:G+J, D+M:F+I, K+L:C+H
+3: D+E:C+L, F+A:K+M, G+I:H+J
+4: F+B:H+I, K+E:G+A, C+M:J+L
+5: K+D:J+M, G+B:C+E, H+A:L+I
+6: G+F:L+A, C+D:H+B, J+E:I+M
+7: C+K:I+E, H+F:J+D, L+B:M+A
+8: H+G:M+B, J+K:L+F, I+D:A+E
+9: J+C:A+D, L+G:I+K, M+F:E+B
+10: L+H:E+F, I+C:M+G, A+K:B+D
+11: I+J:B+K, M+H:A+C, E+G:D+F
+12: M+L:D+G, A+J:E+H, B+C:F+K
+13: A+I:F+C, E+L:B+J, D+H:K+G
+
+----------------------------------------
+Taulukko 11/12: 14 pelaajaa
+Pelaajia: 14 | Kenttiä: 3 | Eriä: 15
+----------------------------------------
+1: F+J:I+A, D+C:L+B, M+G:E+K
+2: N+M:H+L, K+D:C+A, E+I:G+B
+3: E+N:M+J, G+K:D+L, B+C:I+F
+4: D+H:I+K, M+A:B+J, F+L:C+E
+5: N+L:B+E, F+G:H+I, J+A:K+M
+6: M+C:A+G, K+J:B+N, H+E:F+D
+7: J+L:F+H, A+D:E+G, I+M:N+C
+8: D+E:N+I, B+M:F+K, G+L:H+A
+9: J+N:G+D, K+H:M+E, A+B:L+C
+10: G+H:J+C, E+F:L+K, N+A:I+B
+11: L+A:K+N, D+B:J+H, C+G:M+F
+12: C+I:H+M, A+K:N+F, D+J:E+L
+13: N+D:A+F, J+E:C+H, K+B:G+I
+14: B+F:M+D, H+N:K+C, L+I:J+G
+15: L+M:D+I, C+F:N+G, B+H:A+E
+
+----------------------------------------
+Taulukko 12/12: 15 pelaajaa
+Pelaajia: 15 | Kenttiä: 3 | Eriä: 15
+----------------------------------------
+1: B+H:C+D, E+O:L+I, F+J:K+M
+2: C+I:D+E, G+K:L+N, F+A:M+J
+3: H+L:M+O, G+B:N+K, D+J:E+F
+4: E+K:F+G, H+C:O+L, I+M:N+A
+5: F+L:G+H, J+N:O+B, I+D:A+M
+6: K+O:A+C, J+E:B+N, G+M:H+I
+7: H+N:I+J, K+F:C+O, L+A:B+D
+8: I+O:J+K, M+B:C+E, L+G:D+A
+9: N+C:D+F, M+H:E+B, J+A:K+L
+10: K+B:L+M, N+I:F+C, O+D:E+G
+11: L+C:M+N, A+E:F+H, O+J:G+D
+12: B+F:G+I, A+K:H+E, M+D:N+O
+13: N+E:O+A, B+L:I+F, C+G:H+J
+14: O+F:A+B, D+H:I+K, C+M:J+G
+15: E+I:J+L, D+N:K+H, A+G:B+C

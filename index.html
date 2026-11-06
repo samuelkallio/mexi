@@ -1,3 +1,17 @@
+<!--
+  ============================================================
+  Mexicano / Americano / King of the Court
+  Versio: 1.7.0
+  Päivitetty: 2026-11-06
+  ============================================================
+  Yksisivuinen tennis-/padel-sovellus kolmella paritustyypillä:
+    - Mexicano (pisteiden mukainen paritus)
+    - Americano (kiinteä kaavio americano.txt:stä)
+    - King of the Court (voittajat nousevat, häviäjät laskevat)
+  Pistelasku: pelkkä voitto tai pisteiden syöttö
+  Tapahtumat: Firebase Realtime Database + paikallinen lista
+  ============================================================
+-->
 <!DOCTYPE html>
 <html lang="fi">
 <head>
@@ -127,6 +141,11 @@
   .pe-sitout-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; }
   .pe-sitout-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .pe-sitout-list .pe-player { flex: 0 1 auto; min-width: 90px; }
+
+  /* Versiotieto */
+  .version-footer { text-align: center; margin-top: 28px; padding-top: 16px; border-top: 1px solid #e0e3ea; }
+  .version-link { display: inline-block; color: #4a5df9; font-size: 0.85em; text-decoration: underline; cursor: pointer; padding: 4px 8px; }
+  .version-link:active { opacity: 0.7; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 </head>
@@ -160,6 +179,9 @@
     <button class="btn-primary" id="joinEventBtn" style="margin-top:8px">Liity</button>
   </div>
   <div id="landingError" class="error"></div>
+  <div class="version-footer">
+    <a class="version-link" data-version-link>Versio 1.7.0</a>
+  </div>
 </div>
 
 <!-- SETUP -->
@@ -189,7 +211,7 @@
       </div>
       <div class="helper" style="margin-top:8px">
         <div id="mexicanoInfo">Mexicano: pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan taulukon mukaisesti.</div>
-        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan. Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen samojen erien toistumisen välttämiseksi.</div>
+        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan (americano.txt). Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen samojen erien toistumisen välttämiseksi.</div>
         <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat.</div>
       </div>
     </div>
@@ -220,6 +242,9 @@
     <div id="setupError" class="error"></div>
     <button class="btn-primary" id="startBtn" style="margin-top:12px">Aloita</button>
     <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
+    <div class="version-footer">
+      <a class="version-link" data-version-link>Versio 1.7.0</a>
+    </div>
   </div>
 </div>
 
@@ -359,172 +384,87 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // ============================================================
-// Americano-pelikaaviot
-// Jokainen matsi: [p1a, p1b, p2a, p2b] (kirjainindeksit A=0, B=1, ...)
-// Jokainen kierros: lista matseja (yksi per kenttä)
-// Jokainen kaavio: lista kierroksia
+// Sovelluksen versio
 // ============================================================
-const AMERICANO_SCHEDULES = {
-  4: [
-    [[0,2,3,1]],
-    [[1,2,0,3]],
-    [[2,3,1,0]],
-    [[3,1,0,2]],
-    [[0,3,1,2]],
-    [[1,0,2,3]],
-  ],
-  5: [
-    [[0,4,3,1]],
-    [[1,2,4,3]],
-    [[3,0,2,4]],
-    [[4,1,0,2]],
-    [[2,3,1,0]],
-    [[1,0,4,2]],
-    [[2,3,0,4]],
-    [[4,1,3,0]],
-    [[0,2,1,3]],
-    [[3,4,2,1]],
-    [[2,1,0,3]],
-    [[3,4,1,0]],
-    [[0,2,4,1]],
-    [[1,3,2,4]],
-    [[4,0,3,2]],
-  ],
-  6: [
-    [[3,4,0,5]],
-    [[2,5,1,4]],
-    [[0,2,3,5]],
-    [[1,4,2,3]],
-    [[1,5,0,4]],
-    [[0,3,2,5]],
-    [[2,4,0,1]],
-    [[1,3,4,5]],
-    [[1,2,0,5]],
-    [[3,5,2,4]],
-    [[0,3,1,2]],
-    [[4,5,0,1]],
-    [[0,2,3,4]],
-    [[1,5,2,3]],
-    [[0,4,1,3]],
-  ],
-  7: [
-    [[6,4,3,5]],
-    [[5,1,0,4]],
-    [[4,2,6,1]],
-    [[1,3,5,2]],
-    [[2,0,4,3]],
-    [[3,6,1,0]],
-    [[0,5,2,6]],
-  ],
-  8: [
-    [[7,6,5,2],[1,0,3,4]],
-    [[6,3,7,4],[2,1,5,0]],
-    [[7,2,4,1],[3,0,6,5]],
-    [[4,6,1,5],[0,2,3,7]],
-    [[0,4,2,6],[5,7,1,3]],
-    [[2,3,6,1],[4,5,7,0]],
-    [[3,5,4,2],[1,7,0,6]],
-  ],
-  9: [
-    [[1,2,3,6],[4,8,5,7]],
-    [[2,0,4,7],[5,6,3,8]],
-    [[0,1,5,8],[3,7,4,6]],
-    [[4,5,6,0],[7,2,8,1]],
-    [[5,3,7,1],[8,0,6,2]],
-    [[3,4,8,2],[6,1,7,0]],
-    [[7,8,0,3],[1,5,2,4]],
-    [[8,6,1,4],[2,3,0,5]],
-    [[6,7,2,5],[0,4,1,3]],
-  ],
-  10: [
-    [[3,5,4,9],[1,2,6,8]],
-    [[9,8,7,5],[2,0,1,3]],
-    [[8,4,9,1],[7,0,3,6]],
-    [[1,7,2,9],[4,3,0,5]],
-    [[5,8,0,6],[1,4,7,3]],
-    [[0,3,1,8],[2,5,9,6]],
-    [[4,0,8,2],[6,7,5,1]],
-    [[3,9,6,1],[5,4,8,7]],
-    [[4,6,9,0],[3,8,7,2]],
-    [[6,2,4,7],[0,1,5,9]],
-    [[5,6,2,3],[9,7,8,0]],
-  ],
-  11: [
-    [[3,1,0,9],[6,5,4,7]],
-    [[10,7,2,8],[1,4,5,3]],
-    [[4,2,7,1],[9,8,0,6]],
-    [[3,6,5,10],[2,0,8,4]],
-    [[0,5,6,2],[1,10,7,9]],
-    [[4,9,8,3],[5,7,10,0]],
-    [[7,8,9,5],[2,3,6,1]],
-    [[0,1,10,4],[8,6,3,7]],
-    [[6,10,1,8],[5,4,9,2]],
-    [[7,2,3,0],[10,9,4,6]],
-    [[9,3,2,10],[8,0,1,5]],
-  ],
-  12: [
-    [[4,6,8,9],[11,0,1,7],[2,5,3,10]],
-    [[11,3,4,10],[5,8,6,2],[7,9,0,1]],
-    [[8,0,9,5],[10,1,3,4],[11,6,7,2]],
-    [[2,4,6,7],[11,9,10,5],[0,3,1,8]],
-    [[11,1,2,8],[3,6,4,0],[5,7,9,10]],
-    [[6,9,7,3],[8,10,1,2],[11,4,5,0]],
-    [[0,2,4,5],[11,7,8,3],[9,1,10,6]],
-    [[11,10,0,6],[1,4,2,9],[3,5,7,8]],
-    [[4,7,5,1],[6,8,10,0],[11,2,3,9]],
-    [[9,0,2,3],[11,5,6,1],[7,10,8,4]],
-    [[11,8,9,4],[10,2,0,7],[1,3,5,6]],
-  ],
-  13: [
-    [[4,12,10,7],[1,8,3,11],[5,9,6,2]],
-    [[1,0,6,9],[3,12,5,8],[10,11,2,7]],
-    [[3,4,2,11],[5,0,10,12],[6,8,7,9]],
-    [[5,1,7,8],[10,4,6,0],[2,12,9,11]],
-    [[10,3,9,12],[6,1,2,4],[7,0,11,8]],
-    [[6,5,11,0],[2,3,7,1],[9,4,8,12]],
-    [[2,10,8,4],[7,5,9,3],[11,1,12,0]],
-    [[7,6,12,1],[9,10,11,5],[8,3,0,4]],
-    [[9,2,0,3],[11,6,8,10],[12,5,4,1]],
-    [[11,7,4,5],[8,2,12,6],[0,10,1,3]],
-    [[8,9,1,10],[12,7,0,2],[4,6,3,5]],
-    [[12,11,3,6],[0,9,4,7],[1,2,5,10]],
-    [[0,8,5,2],[4,11,1,9],[3,7,10,6]],
-  ],
-  14: [
-    [[5,9,8,0],[3,2,11,1],[12,6,4,10]],
-    [[13,12,7,11],[10,3,2,0],[4,8,6,1]],
-    [[4,13,12,9],[6,10,3,11],[1,2,8,5]],
-    [[3,7,8,10],[12,0,1,9],[5,11,2,4]],
-    [[13,11,1,4],[5,6,7,8],[9,0,10,12]],
-    [[12,2,0,6],[10,9,1,13],[7,4,5,3]],
-    [[9,11,5,7],[0,3,4,6],[8,12,13,2]],
-    [[3,4,13,8],[1,12,5,10],[6,11,7,0]],
-    [[9,13,6,3],[10,7,12,4],[0,1,11,2]],
-    [[6,7,9,2],[4,5,11,10],[13,0,8,1]],
-    [[11,0,10,13],[3,1,9,7],[2,6,12,5]],
-    [[2,8,7,12],[0,10,13,5],[3,9,4,11]],
-    [[13,3,0,5],[9,4,2,7],[10,1,6,8]],
-    [[1,5,12,3],[7,13,10,2],[11,8,9,6]],
-    [[11,12,3,8],[2,5,13,6],[1,7,0,4]],
-  ],
-  15: [
-    [[1,7,2,3],[4,14,11,8],[5,9,10,12]],
-    [[2,8,3,4],[6,10,11,13],[5,0,12,9]],
-    [[7,11,12,14],[6,1,13,10],[3,9,4,5]],
-    [[4,10,5,6],[7,2,14,11],[8,12,13,0]],
-    [[5,11,6,7],[9,13,14,1],[8,3,0,12]],
-    [[10,14,0,2],[9,4,1,13],[6,12,7,8]],
-    [[7,13,8,9],[10,5,2,14],[11,0,1,3]],
-    [[8,14,9,10],[12,1,2,4],[11,6,3,0]],
-    [[13,2,3,5],[12,7,4,1],[9,0,10,11]],
-    [[10,1,11,12],[13,8,5,2],[14,3,4,6]],
-    [[11,2,12,13],[0,4,5,7],[14,9,6,3]],
-    [[1,5,6,8],[0,10,7,4],[12,3,13,14]],
-    [[13,4,14,0],[1,11,8,5],[2,6,7,9]],
-    [[14,5,0,1],[3,7,8,10],[2,12,9,6]],
-    [[4,8,9,11],[3,13,10,7],[0,6,1,2]],
-  ],
-};
+const APP_VERSION = '1.7.0';
+
+// ============================================================
+// Americano-taulukot (ladataan ulkoisesta tiedostosta)
+// ============================================================
+let AMERICANO_SCHEDULES = {};
+let americanoLoadPromise = null;
+
+function letterToIndex(letter) {
+  return letter.toUpperCase().charCodeAt(0) - 65;
+}
+
+function parseAmericanoTxt(text) {
+  const schedules = {};
+  const lines = text.split(/\r?\n/);
+  let currentPlayers = null;
+  let currentRounds = [];
+
+  const flush = () => {
+    if (currentPlayers !== null && currentRounds.length > 0) {
+      schedules[currentPlayers] = currentRounds;
+    }
+    currentRounds = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const playersMatch = trimmed.match(/Pelaajia:\s*(\d+)/);
+    if (playersMatch) {
+      flush();
+      currentPlayers = parseInt(playersMatch[1], 10);
+      continue;
+    }
+
+    const roundMatch = trimmed.match(/^(\d+):\s*(.+)$/);
+    if (roundMatch && currentPlayers !== null) {
+      const matchesStr = roundMatch[2];
+      const matchParts = matchesStr.split(',').map(s => s.trim());
+      const round = matchParts.map(m => {
+        const parts = m.split(':');
+        if (parts.length !== 2) return null;
+        const p1Raw = parts[0].trim().split('+').map(s => s.trim());
+        const p2Raw = parts[1].trim().split('+').map(s => s.trim());
+        if (p1Raw.length !== 2 || p2Raw.length !== 2) return null;
+        const p1 = p1Raw.map(letterToIndex);
+        const p2 = p2Raw.map(letterToIndex);
+        if ([...p1, ...p2].some(n => isNaN(n) || n < 0)) return null;
+        return [p1[0], p1[1], p2[0], p2[1]];
+      }).filter(Boolean);
+
+      if (round.length > 0) currentRounds.push(round);
+    }
+  }
+  flush();
+  return schedules;
+}
+
+function loadAmericanoSchedules() {
+  if (americanoLoadPromise) return americanoLoadPromise;
+  americanoLoadPromise = fetch('americano.txt', { cache: 'no-cache' })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(text => {
+      AMERICANO_SCHEDULES = parseAmericanoTxt(text);
+      const counts = Object.keys(AMERICANO_SCHEDULES).map(Number).sort((a, b) => a - b);
+      console.log('Americano-taulukot ladattu pelaajamäärille:', counts.join(', '));
+      return AMERICANO_SCHEDULES;
+    })
+    .catch(err => {
+      console.error('Americano-taulukoiden lataus epäonnistui:', err);
+      AMERICANO_SCHEDULES = {};
+      return AMERICANO_SCHEDULES;
+    });
+  return americanoLoadPromise;
+}
 
 // ============================================================
 // Tila
@@ -852,7 +792,7 @@ function generateRoundForState(st, existingRounds) {
 function generateAmericanoRound(st, existingRounds) {
   const n = st.players.length;
   const schedule = AMERICANO_SCHEDULES[n];
-  if (!schedule) return null;
+  if (!schedule || schedule.length === 0) return null;
 
   const scheduleLen = schedule.length;
   const roundInBlock = existingRounds.length % scheduleLen;
@@ -873,6 +813,8 @@ function generateAmericanoRound(st, existingRounds) {
   }
 
   const roundSchedule = schedule[roundInBlock];
+  if (!roundSchedule) return null;
+
   const matches = roundSchedule.map(md => ({
     p1: [mapping[md[0]], mapping[md[1]]],
     p2: [mapping[md[2]], mapping[md[3]]],
@@ -1122,7 +1064,7 @@ function updateWinningScoreVisibility() {
 
 function getScheduleCourts(playerCount) {
   const sched = AMERICANO_SCHEDULES[playerCount];
-  return sched ? sched[0].length : null;
+  return sched && sched[0] ? sched[0].length : null;
 }
 
 function updateSetupHelpers() {
@@ -1134,6 +1076,13 @@ function updateSetupHelpers() {
   const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
 
   if (type === 'americano') {
+    const loaded = Object.keys(AMERICANO_SCHEDULES).length > 0;
+    if (!loaded) {
+      ci.disabled = false;
+      ci.max = maxCourts;
+      document.getElementById('courtsHelper').textContent = 'Ladataan Americano-taulukoita...';
+      return;
+    }
     const schedCourts = getScheduleCourts(n);
     if (schedCourts !== null) {
       ci.value = schedCourts;
@@ -1144,8 +1093,9 @@ function updateSetupHelpers() {
     } else {
       ci.disabled = false;
       ci.max = maxCourts;
-      document.getElementById('courtsHelper').textContent = n > 15
-        ? 'Americano-taulukko on 4–15 pelaajalle. Käytetään Mexicanoa.'
+      const supported = Object.keys(AMERICANO_SCHEDULES).map(Number).sort((a,b)=>a-b);
+      document.getElementById('courtsHelper').textContent = n > 0
+        ? `Americano-taulukkoa ei ole ${n} pelaajalle (tuetut: ${supported.join(', ')}). Käytetään Mexicanoa.`
         : 'Tarvitaan vähintään 4 pelaajaa';
     }
     return;
@@ -1178,9 +1128,18 @@ async function applySettings() {
   const winningScoreRaw = parseInt(document.getElementById('winningScoreInput').value, 10);
   const winningScore = isNaN(winningScoreRaw) || winningScoreRaw < 0 ? 0 : winningScoreRaw;
 
-  // Americano: käytä kaavion kenttämäärää
-  if (pairingType === 'americano' && AMERICANO_SCHEDULES[names.length]) {
-    courts = AMERICANO_SCHEDULES[names.length][0].length;
+  if (pairingType === 'americano') {
+    if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
+      showLoading('Ladataan Americano-taulukoita...');
+      await loadAmericanoSchedules();
+      hideLoading();
+    }
+    const sched = AMERICANO_SCHEDULES[names.length];
+    if (!sched || sched.length === 0) {
+      errEl.textContent = `Americano-taulukkoa ei löytynyt ${names.length} pelaajalle. Tarkista americano.txt tai valitse toinen paritustyyppi.`;
+      return;
+    }
+    courts = sched[0].length;
   }
 
   const maxCourts = Math.floor(names.length / 4);
@@ -1647,6 +1606,9 @@ async function savePairingEditor() {
 // Kierroksen kulku
 // ============================================================
 async function nextRound() {
+  if ((state.pairingType || 'mexicano') === 'americano') {
+    await loadAmericanoSchedules();
+  }
   const stateRef = ref(db, `events/${eventCode}/state`);
   try {
     await runTransaction(stateRef, (current) => {
@@ -1929,6 +1891,61 @@ async function copyShareLink() {
 }
 
 // ============================================================
+// Sovelluksen päivitys (tyhjentää selaintiedot ja hakee uusimman)
+// ============================================================
+async function updateApp() {
+  const warning =
+    '⚠️ VAROITUS: Sovelluksen päivitys\n\n' +
+    'Tämä toiminto:\n' +
+    '  • Tyhjentää KAIKKI tämän selaimen tiedot\n' +
+    '  • Poistaa "Omat tapahtumat" -listan\n' +
+    '  • Poistaa välimuistit ja istuntotiedot\n' +
+    '  • Hakee palvelimelta uusimman sovelluskoodin\n\n' +
+    'Tapahtumat säilyvät palvelimella (Firebase), mutta tämä selain ' +
+    'ei enää muista niitä automaattisesti. Voit liittyä tapahtumaan ' +
+    'uudelleen sen 5-kirjaimisella koodilla.\n\n' +
+    'Haluatko varmasti jatkaa päivitykseen?';
+
+  if (!confirm(warning)) return;
+
+  showLoading('Tyhjennetään selaintietoja ja haetaan uusinta versiota...');
+
+  try {
+    // 1. Tyhjennä localStorage
+    try { localStorage.clear(); } catch (e) { console.warn('localStorage clear failed', e); }
+
+    // 2. Tyhjennä sessionStorage
+    try { sessionStorage.clear(); } catch (e) { console.warn('sessionStorage clear failed', e); }
+
+    // 3. Tyhjennä Cache API -välimuistit
+    if ('caches' in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      } catch (e) { console.warn('Cache API clear failed', e); }
+    }
+
+    // 4. Poista service worker -rekisteröinnit
+    if ('serviceWorker' in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      } catch (e) { console.warn('Service worker unregister failed', e); }
+    }
+
+    // 5. Hae uusin sovelluskoodi palvelimelta cache-bustin avulla
+    const url = new URL(location.href);
+    url.search = '';
+    url.searchParams.set('v', Date.now().toString());
+    // Käytä replaceä, jotta vanha sivu ei jää historiaan
+    location.replace(url.toString());
+  } catch (e) {
+    hideLoading();
+    alert('Päivitys epäonnistui: ' + (e.message || 'tuntematon'));
+  }
+}
+
+// ============================================================
 // Tapahtumien kytkennät
 // ============================================================
 document.getElementById('createEventBtn').addEventListener('click', createNewEvent);
@@ -1945,7 +1962,7 @@ document.getElementById('joinCodeInput').addEventListener('input', (e) => {
 document.getElementById('playersInput').addEventListener('input', updateSetupHelpers);
 document.getElementById('courtsInput').addEventListener('input', () => {
   const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
-  if (type === 'americano') return; // Americano ohittaa kenttämäärän
+  if (type === 'americano') return;
   courtsAutoManaged = false;
   updateSetupHelpers();
 });
@@ -2022,6 +2039,14 @@ document.getElementById('shareModal').addEventListener('click', (e) => {
   if (e.target.id === 'shareModal') closeShareModal();
 });
 
+// Versiolinkki (kaikki data-version-link -elementit)
+document.querySelectorAll('[data-version-link]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    updateApp();
+  });
+});
+
 window.addEventListener('popstate', () => {
   const params = new URLSearchParams(location.search);
   const code = params.get('event');
@@ -2040,6 +2065,14 @@ window.addEventListener('popstate', () => {
 // Käynnistys
 // ============================================================
 (function init() {
+  // Lataa Americano-taulukot taustalla (fetch on välimuistissa)
+  loadAmericanoSchedules();
+
+  // Päivitä versiolinkkien teksti dynaamisesti
+  document.querySelectorAll('[data-version-link]').forEach(el => {
+    el.textContent = 'Versio ' + APP_VERSION;
+  });
+
   const params = new URLSearchParams(location.search);
   const code = params.get('event');
   if (code) {
