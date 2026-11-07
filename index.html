@@ -1,13 +1,21 @@
 <!--
   ============================================================
   Mexicano / Americano / King of the Court
-  Versio: 1.9.0
+  Versio: 1.10.0
   Päivitetty: 2026-11-07
   ============================================================
-  UI-uudistus: teema (vaalea/tumma), tekstiskaala (S/M/L/XL),
-  kapeampi kiinteä chrome, dynaaminen alapainike, korttilistat
-  tuloksiin ja historiaan, ⋯-valikko, auto-submit liittymiskoodi.
-  Kenttätulosrivit (5.1) säilytetty ennallaan.
+  Muutokset v1.10.0:
+  - Tulokset takaisin taulukoksi. Leveällä näytöllä + yli 6
+    pelaajaa → 2 saraketta (esim. 11 → 6 + 5).
+  - "Kierrokset" siirretty ⋯-valikkoon.
+  - Näyttöasetukset (teema + tekstikoko) omaan modaaliin.
+  - Tekstikoko +/- 75–150 % (5 % askel).
+  - Parinvaihtoeditorin parit allekkain + "vs".
+  - Ylätunnisteesta poistettu "mennyt".
+  - Pelaajalistan muutokset ilman nollausta:
+    lisäys → seuraavaan peliin, poisto → pois seuraavista
+    (säilyy tuloksissa), sama nimi takaisin → statsit jatkuvat,
+    nimen korjaus → päivittyy kaikkialle.
   ============================================================
 -->
 <!DOCTYPE html>
@@ -19,27 +27,34 @@
 <meta name="color-scheme" content="light dark">
 <title>Mexicano</title>
 
-<!-- Estä teeman välähdys: aseta teema ja skaala ennen ensimmäistä maalausta -->
 <script>
 (function () {
   try {
     var theme = localStorage.getItem('mexicano_ui_theme') || 'auto';
-    var scale = localStorage.getItem('mexicano_ui_scale') || '1';
     if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
-    document.documentElement.style.setProperty('--text-scale', scale);
+
+    var storedScale = localStorage.getItem('mexicano_ui_scale');
+    var pct = 100;
+    if (storedScale) {
+      var num = parseFloat(storedScale);
+      if (num > 0 && num <= 2) {
+        // Vanha muoto (0.875, 1, 1.125, 1.25) → prosentiksi
+        pct = Math.round(num * 100);
+        localStorage.setItem('mexicano_ui_scale', String(pct));
+      } else if (num >= 75 && num <= 150) {
+        pct = num;
+      }
+    }
+    document.documentElement.style.setProperty('--text-scale', String(pct / 100));
   } catch (e) {}
 })();
 </script>
 
 <style>
-  /* ============================================================
-     Teema-tokenit (vaalea oletus)
-     ============================================================ */
   :root {
     color-scheme: light dark;
     --text-scale: 1;
-
     --bg: #f2f4f8;
     --surface: #ffffff;
     --surface-2: #f5f6fa;
@@ -66,8 +81,6 @@
     --shadow: 0 1px 3px rgba(0,0,0,0.06);
     --shadow-lg: 0 4px 20px rgba(0,0,0,0.10);
   }
-
-  /* Tumma teema: prefers-color-scheme + data-theme="dark" */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1117;
@@ -125,18 +138,13 @@
     --shadow-lg: 0 4px 20px rgba(0,0,0,0.5);
   }
 
-  /* ============================================================
-     Perusta
-     ============================================================ */
   html { font-size: calc(16px * var(--text-scale)); -webkit-text-size-adjust: 100%; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 1.0625rem;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; font-size: 1.0625rem;
     transition: background-color 0.2s;
   }
   .screen { padding: 12px; padding-bottom: 76px; max-width: 600px; margin: 0 auto; }
@@ -148,38 +156,24 @@
   label { display: block; margin: 8px 0 6px; font-weight: 500; font-size: 0.95rem; color: var(--text); }
   input[type=text], input[type=number], textarea, select {
     width: 100%; padding: 12px;
-    font-size: 16px;
-    font-size: max(1rem, 16px);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    font-family: inherit;
-    -webkit-appearance: none;
+    font-size: 16px; font-size: max(1rem, 16px);
+    border: 1px solid var(--border-strong); border-radius: 10px;
+    background: var(--surface); color: var(--text);
+    font-family: inherit; -webkit-appearance: none;
   }
+  input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; background: var(--surface-2); border-radius: 3px; margin-top: 12px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+  input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); cursor: pointer; }
   textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, monospace; }
 
-  button {
-    font-family: inherit; font-size: 1rem;
-    border: none; border-radius: 12px;
-    padding: 14px 20px; cursor: pointer;
-    font-weight: 600;
-    transition: transform 0.1s, opacity 0.1s, background-color 0.15s;
-  }
+  button { font-family: inherit; font-size: 1rem; border: none; border-radius: 12px; padding: 14px 20px; cursor: pointer; font-weight: 600; transition: transform 0.1s, opacity 0.1s, background-color 0.15s; }
   button:active:not(:disabled) { transform: scale(0.97); }
   button:focus-visible, a:focus-visible, input:focus-visible,
-  select:focus-visible, textarea:focus-visible,
-  [role="button"]:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+  select:focus-visible, textarea:focus-visible, [role="button"]:focus-visible {
+    outline: 2px solid var(--primary); outline-offset: 2px;
   }
 
-  .btn-primary {
-    background: var(--primary); color: var(--on-primary);
-    width: 100%; font-size: 1.05rem; padding: 14px;
-    border-radius: 12px; font-weight: 600;
-    min-height: 48px;
-  }
+  .btn-primary { background: var(--primary); color: var(--on-primary); width: 100%; font-size: 1.05rem; padding: 14px; border-radius: 12px; font-weight: 600; min-height: 48px; }
   .btn-primary:disabled { background: var(--border-strong) !important; color: var(--text-muted) !important; opacity: 1 !important; cursor: not-allowed; }
   .btn-secondary { background: var(--surface-2); color: var(--text); min-height: 48px; }
   .btn-small { padding: 8px 14px; font-size: 0.9rem; background: var(--surface-2); color: var(--text); }
@@ -187,253 +181,98 @@
   .radio-row { display: flex; gap: 8px; }
   .radio-row.three { gap: 6px; }
   .radio-row label {
-    flex: 1; padding: 12px;
-    border: 2px solid var(--border-strong);
-    border-radius: 10px;
-    text-align: center;
-    background: var(--surface);
-    cursor: pointer; margin: 0;
-    font-weight: 500; font-size: 0.85rem;
+    flex: 1; padding: 12px; border: 2px solid var(--border-strong);
+    border-radius: 10px; text-align: center; background: var(--surface);
+    cursor: pointer; margin: 0; font-weight: 500; font-size: 0.85rem;
     display: flex; align-items: center; justify-content: center;
-    min-height: 48px;
-    transition: all 0.15s;
-    color: var(--text);
+    min-height: 48px; transition: all 0.15s; color: var(--text);
   }
   .radio-row input { display: none; }
   .radio-row label:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
 
-  /* ============================================================
-     Topbar – yhtenäinen 48px korkea
-     ============================================================ */
-  .topbar {
-    display: flex; align-items: center; gap: 4px;
-    padding: 2px 8px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 10;
-    min-height: 48px;
-    max-width: 600px;
-    margin: 0 auto;
-  }
+  .topbar { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; min-height: 48px; max-width: 600px; margin: 0 auto; }
   .topbar-title { font-weight: 600; font-size: 1rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
   .topbar-actions { display: flex; gap: 2px; align-items: center; }
+  .topbar-main-info { flex: 1; text-align: center; font-size: 0.9rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; min-width: 0; }
+  .topbar-main-info .dot { color: var(--text-muted); margin: 0 4px; }
 
-  .icon-btn {
-    background: transparent;
-    border: none;
-    border-radius: 10px;
-    padding: 0;
-    font-size: 1.1rem;
-    cursor: pointer;
-    width: 44px; height: 44px;
-    min-width: 44px; min-height: 44px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text);
-    flex-shrink: 0;
-  }
+  .icon-btn { background: transparent; border: none; border-radius: 10px; padding: 0; font-size: 1.1rem; cursor: pointer; width: 44px; height: 44px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; color: var(--text); flex-shrink: 0; }
   .icon-btn:hover, .icon-btn:active { background: var(--surface-2); }
   .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-  /* Main-näkymän topbar: ◀ K 2/5 · 8p ▶ 📊 ⋯ */
-  .topbar-main-info {
-    flex: 1; text-align: center;
-    font-size: 0.9rem; font-weight: 600; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    padding: 0 4px; min-width: 0;
-  }
-  .topbar-main-info .dot { color: var(--text-muted); margin: 0 4px; }
-  .topbar-main-info .past-tag {
-    display: inline-block;
-    background: var(--past-bg); color: var(--past-fg);
-    font-size: 0.7rem; padding: 1px 5px; border-radius: 4px;
-    margin-left: 4px; text-transform: uppercase; letter-spacing: 0.5px;
-  }
-
-  .icon-btn-small {
-    background: transparent; border: none;
-    border-radius: 10px; padding: 0;
-    font-size: 1.1rem; cursor: pointer;
-    width: 40px; height: 40px;
-    display: inline-flex; align-items: center; justify-content: center;
-    color: var(--text-muted);
-  }
+  .icon-btn-small { background: transparent; border: none; border-radius: 10px; padding: 0; font-size: 1.1rem; cursor: pointer; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
   .icon-btn-small:hover, .icon-btn-small:active { background: var(--surface-2); color: var(--text); }
 
-  /* ============================================================
-     Bannerit (ei kiinteitä, osa scrollia)
-     ============================================================ */
-  .sitout-banner {
-    background: var(--warn-bg);
-    border: 1px solid var(--warn-border);
-    border-radius: 8px;
-    padding: 6px 10px; margin-bottom: 8px;
-    font-size: 0.85rem; color: var(--warn-fg);
-  }
+  .sitout-banner { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 0.85rem; color: var(--warn-fg); }
   .sitout-banner b { color: var(--warn-fg); font-weight: 700; }
-  .past-banner {
-    background: var(--past-bg);
-    border: 1px solid var(--past-border);
-    border-radius: 8px;
-    padding: 8px 12px; margin-bottom: 8px;
-    font-size: 0.85rem; color: var(--past-fg);
-  }
+  .past-banner { background: var(--past-bg); border: 1px solid var(--past-border); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85rem; color: var(--past-fg); }
 
-  /* ============================================================
-     Kenttärivit – SÄILYTETTY ENNALLAAN
-     ============================================================ */
+  /* Kenttärivit – säilytetty ennallaan */
   .court-list { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; }
   .court-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); min-height: 64px; }
   .court-row:last-child { border-bottom: none; }
   .court-name { width: 42px; display: flex; align-items: center; justify-content: center; background: var(--surface-2); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; border-right: 1px solid var(--border); flex-shrink: 0; }
-
-  .compact-pair {
-    flex: 1; min-width: 0;
-    display: flex; flex-direction: column;
-    justify-content: center; align-items: center;
-    padding: 6px 4px;
-    border: none; background: transparent;
-    font-family: inherit; font-size: 0.95rem; font-weight: 500;
-    color: var(--text);
-    transition: background 0.15s; line-height: 1.3;
-    cursor: pointer; margin: 0; border-radius: 0; text-align: center;
-  }
+  .compact-pair { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 6px 4px; border: none; background: transparent; font-family: inherit; font-size: 0.95rem; font-weight: 500; color: var(--text); transition: background 0.15s; line-height: 1.3; cursor: pointer; margin: 0; border-radius: 0; text-align: center; }
   .compact-pair.winner { background: var(--win-bg); color: var(--win-fg); font-weight: 700; }
   .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  .compact-score {
-    display: flex; align-items: center; justify-content: center;
-    width: 70px; flex-shrink: 0;
-    padding: 0; font-weight: 700; color: var(--text-muted); font-size: 1rem;
-    border-top: none; border-bottom: none;
-    border-left: 1px solid var(--border); border-right: 1px solid var(--border);
-    border-radius: 0; background: var(--surface-2);
-    font-family: inherit; cursor: pointer;
-  }
+  .compact-score { display: flex; align-items: center; justify-content: center; width: 70px; flex-shrink: 0; padding: 0; font-weight: 700; color: var(--text-muted); font-size: 1rem; border-top: none; border-bottom: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-radius: 0; background: var(--surface-2); font-family: inherit; cursor: pointer; }
   .compact-score.winner { color: var(--win-fg); background: var(--win-bg); }
   .compact-score.tie { color: var(--tie-fg); background: var(--tie-bg); }
 
-  /* ============================================================
-     Bottom bar – 56px kiinteä
-     ============================================================ */
-  .bottom-bar {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
-    z-index: 20;
-  }
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 20; }
   .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; min-height: 44px; padding: 10px 16px; font-size: 1rem; }
 
-  /* ============================================================
-     Modaalit (bottom sheet)
-     ============================================================ */
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 100;
-    display: flex; align-items: flex-end; justify-content: center;
-  }
-  .modal {
-    background: var(--surface);
-    border-radius: 20px 20px 0 0;
-    padding: 12px 20px 20px;
-    padding-bottom: max(20px, calc(20px + env(safe-area-inset-bottom, 0px)));
-    width: 100%; max-width: 600px;
-    max-height: 90vh;
-    max-height: 90dvh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-lg);
-  }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
+  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 12px 20px 20px; padding-bottom: max(20px, calc(20px + env(safe-area-inset-bottom, 0px))); width: 100%; max-width: 600px; max-height: 90vh; max-height: 90dvh; overflow-y: auto; box-shadow: var(--shadow-lg); }
   .modal h3 { margin: 4px 0 12px; font-size: 1.1rem; color: var(--text); }
   .modal-drag-handle { width: 36px; height: 4px; background: var(--border-strong); border-radius: 2px; margin: 4px auto 12px; }
 
   .score-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
   .score-row .label-side { flex: 1; font-weight: 500; }
   .score-row input { width: 80px; text-align: center; font-size: 1.3rem; font-weight: 600; }
-
   .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
   .modal-actions button { flex: 1; padding: 12px; min-height: 48px; }
   .modal-actions .btn-primary { width: auto; }
 
-  /* ⋯-valikko */
   .menu-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-  .menu-item {
-    width: 100%; text-align: left;
-    padding: 12px;
-    border-radius: 8px;
-    background: transparent; color: var(--text);
-    font-size: 1rem; font-weight: 500;
-    cursor: pointer; border: none; font-family: inherit;
-    display: flex; align-items: center; gap: 10px;
-    min-height: 48px;
-  }
+  .menu-item { width: 100%; text-align: left; padding: 12px; border-radius: 8px; background: transparent; color: var(--text); font-size: 1rem; font-weight: 500; cursor: pointer; border: none; font-family: inherit; display: flex; align-items: center; gap: 10px; min-height: 48px; }
   .menu-item:hover, .menu-item:active { background: var(--surface-2); }
   .menu-item-danger { color: var(--danger); }
   .menu-divider { height: 1px; background: var(--border); margin: 8px 0; }
 
   .ui-section { margin-bottom: 16px; }
   .ui-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: block; }
-  .size-row label:nth-child(1) { font-size: 0.8rem; }
-  .size-row label:nth-child(2) { font-size: 0.95rem; }
-  .size-row label:nth-child(3) { font-size: 1.1rem; }
-  .size-row label:nth-child(4) { font-size: 1.25rem; }
 
-  /* ============================================================
-     Tulokset – korttilista
-     ============================================================ */
-  .result-card {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 14px;
-    background: var(--surface);
-    border-radius: 12px;
-    margin-bottom: 8px;
-    box-shadow: var(--shadow);
-    min-height: 64px;
+  /* Tekstikoon säädin */
+  .text-size-control { display: flex; align-items: center; gap: 12px; }
+  .size-btn { width: 56px; height: 56px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: 1.6rem; font-weight: 700; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; line-height: 1; }
+  .size-btn:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary-dark); border-color: var(--primary); }
+  .size-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .size-value { flex: 1; text-align: center; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+
+  /* Tulokset – taulukko */
+  .results-container { display: block; }
+  .results-container > .results-table { margin-bottom: 12px; }
+  @media (min-width: 768px) {
+    .results-container.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    .results-container.split > .results-table { margin-bottom: 0; }
+    .results-container.split .results-table { font-size: 0.85rem; }
+    .results-container.split .results-table th, .results-container.split .results-table td { padding: 7px 5px; }
   }
-  .result-card.rank-1 { background: var(--rank-1-bg); }
-  .result-rank {
-    font-size: 1.3rem; font-weight: 700;
-    color: var(--text-muted);
-    min-width: 28px; text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-  .result-card.rank-1 .result-rank { color: var(--tie-fg); }
-  .result-main { flex: 1; min-width: 0; }
-  .result-name { font-weight: 600; font-size: 1rem; word-break: break-word; }
-  .result-stats { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
-  .result-saldo {
-    font-size: 1.4rem; font-weight: 700;
-    color: var(--primary);
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-    flex-shrink: 0;
-  }
+  .results-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  .results-table th, .results-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  .results-table th { background: var(--surface-2); font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+  .results-table td.num, .results-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table tr.rank-1 td { font-weight: 700; background: var(--rank-1-bg); }
+  .name-cell { word-break: break-word; }
+  .rank-num { display: inline-block; min-width: 1.6em; color: var(--text-muted); font-weight: 600; font-size: 0.85em; margin-right: 4px; font-variant-numeric: tabular-nums; }
   .results-legend { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 12px 0; }
 
-  /* ============================================================
-     Historia – pystylista
-     ============================================================ */
-  .history-round {
-    background: var(--surface);
-    border-radius: 12px;
-    padding: 10px 12px;
-    margin-bottom: 10px;
-    box-shadow: var(--shadow);
-  }
-  .history-round-header {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 0.75rem; color: var(--text-muted);
-    margin-bottom: 6px;
-    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-    gap: 8px;
-  }
+  /* Historia – pystylista */
+  .history-round { background: var(--surface); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .history-round-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; gap: 8px; }
   .history-round-sitouts { text-align: right; word-break: break-word; }
-  .history-match {
-    display: flex; gap: 8px; align-items: baseline;
-    padding: 6px 0;
-    border-top: 1px solid var(--border);
-    font-size: 0.9rem;
-  }
+  .history-match { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); font-size: 0.9rem; }
   .history-match:first-of-type { border-top: none; padding-top: 2px; }
   .history-court { min-width: 26px; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; flex-shrink: 0; }
   .history-pairs { flex: 1; word-break: break-word; line-height: 1.4; }
@@ -441,19 +280,11 @@
   .history-empty { text-align: center; padding: 24px; color: var(--text-muted); }
   .history-sitout-badge { display: inline-block; background: var(--warn-bg); color: var(--warn-fg); padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 
-  /* ============================================================
-     Muut apurit
-     ============================================================ */
   .error { color: var(--danger); font-size: 0.9rem; margin-top: 8px; min-height: 1em; }
   .helper { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
   .stat-points { color: var(--text-muted); font-size: 0.85em; font-weight: 400; }
 
-  .loading-overlay {
-    position: fixed; inset: 0;
-    background: rgba(242,244,248,0.95);
-    z-index: 200;
-    display: flex; align-items: center; justify-content: center;
-  }
+  .loading-overlay { position: fixed; inset: 0; background: rgba(242,244,248,0.95); z-index: 200; display: flex; align-items: center; justify-content: center; }
   [data-theme="dark"] .loading-overlay { background: rgba(15,17,23,0.95); }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .loading-overlay { background: rgba(15,17,23,0.95); }
@@ -471,16 +302,7 @@
   .results-qr { width: 36px; height: 36px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .results-qr img { width: 100%; height: 100%; display: block; }
 
-  /* Omat tapahtumat */
-  .event-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 12px 4px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    border-radius: 8px;
-    min-height: 56px;
-    transition: background 0.1s;
-  }
+  .event-item { display: flex; align-items: center; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 8px; min-height: 56px; transition: background 0.1s; }
   .event-item:hover, .event-item:active { background: var(--surface-2); }
   .event-item:last-child { border-bottom: none; }
   .event-info { flex: 1; min-width: 0; }
@@ -490,31 +312,19 @@
   .btn-icon-delete { background: transparent; border: none; padding: 8px; border-radius: 8px; color: var(--danger); font-size: 1rem; cursor: pointer; min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .btn-icon-delete:hover { background: var(--surface-2); }
 
-  /* Parinvaihto-editori */
+  /* Parinvaihto-editori – parit allekkain */
   .pe-court { margin-bottom: 14px; }
   .pe-court:last-child { margin-bottom: 0; }
   .pe-court-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; letter-spacing: 0.5px; }
-  .pe-pair-row { display: flex; gap: 6px; margin-bottom: 6px; }
-  .pe-pair-row:last-child { margin-bottom: 0; }
-  .pe-player {
-    flex: 1; padding: 12px 8px;
-    background: var(--surface-2);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    text-align: center; font-family: inherit; font-size: 0.9rem;
-    font-weight: 500; cursor: pointer;
-    min-height: 48px;
-    word-break: break-word;
-    color: var(--text);
-    transition: border-color 0.15s, background 0.15s;
-  }
+  .pe-pair-row { display: flex; gap: 6px; margin-bottom: 0; }
+  .pe-pair-vs { text-align: center; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; padding: 6px 0; font-weight: 700; }
+  .pe-player { flex: 1; padding: 12px 8px; background: var(--surface-2); border: 2px solid var(--border); border-radius: 8px; text-align: center; font-family: inherit; font-size: 0.9rem; font-weight: 500; cursor: pointer; min-height: 48px; word-break: break-word; color: var(--text); transition: border-color 0.15s, background 0.15s; }
   .pe-player:active { transform: scale(0.97); }
   .pe-player.pe-selected { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; }
   .pe-sitout-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
   .pe-sitout-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .pe-sitout-list .pe-player { flex: 0 1 auto; min-width: 90px; }
 
-  /* Setup details/accordion */
   details.info-details { margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
   details.info-details summary { cursor: pointer; user-select: none; padding: 6px 0; color: var(--primary); font-weight: 500; }
   details.info-details summary:hover { text-decoration: underline; }
@@ -522,18 +332,15 @@
 
   .use-last-btn { margin-top: 6px; padding: 8px 12px; font-size: 0.85rem; background: transparent; color: var(--primary); border: 1px solid var(--primary); border-radius: 8px; font-weight: 500; cursor: pointer; min-height: 36px; }
   .use-last-btn:hover { background: var(--primary-soft); }
+  .hint-add-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-muted); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin: 0 2px; font-family: inherit; }
+  .hint-add-btn:hover { background: var(--surface-2); color: var(--text); }
 
-  /* Versiotieto */
   .version-footer { text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
   .version-link { display: inline-block; color: var(--primary); font-size: 0.85rem; text-decoration: underline; cursor: pointer; padding: 8px 12px; }
   .version-link:active { opacity: 0.7; }
 
-  /* Liikkumisen esto */
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
-    }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     button:active:not(:disabled) { transform: none !important; }
   }
 </style>
@@ -550,7 +357,7 @@
 
 <!-- LANDING -->
 <div id="landingScreen" class="screen hidden">
-  <h1>🎾 Mexicano <button class="icon-btn-small" id="landingSettingsBtn" aria-label="Käyttöliittymäasetukset" style="margin-left:auto">⚙️</button></h1>
+  <h1>🎾 Mexicano <button class="icon-btn-small" id="landingSettingsBtn" aria-label="Näyttöasetukset" style="margin-left:auto">⚙️</button></h1>
 
   <div class="card">
     <h2 style="margin-top:0">Luo uusi tapahtuma</h2>
@@ -571,7 +378,7 @@
 
   <div id="landingError" class="error"></div>
   <div class="version-footer">
-    <a class="version-link" data-version-link>Versio 1.9.0</a>
+    <a class="version-link" data-version-link>Versio 1.10.0</a>
   </div>
 </div>
 
@@ -587,6 +394,7 @@
       <label for="playersInput">Pelaajat (yksi per rivi)</label>
       <textarea id="playersInput" placeholder="A&#10;B&#10;C&#10;D&#10;E&#10;F&#10;G&#10;H&#10;I&#10;J"></textarea>
       <div class="helper" id="playerCountHelper">0 pelaajaa</div>
+      <div class="helper" id="inactiveHint"></div>
       <button class="use-last-btn hidden" id="useLastPlayersBtn" type="button">Käytä viimeisintä listaa</button>
     </div>
     <div class="card">
@@ -639,7 +447,7 @@
     <button class="btn-primary" id="startBtn" style="margin-top:8px">Aloita</button>
     <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
     <div class="version-footer">
-      <a class="version-link" data-version-link>Versio 1.9.0</a>
+      <a class="version-link" data-version-link>Versio 1.10.0</a>
     </div>
   </div>
 </div>
@@ -671,10 +479,9 @@
     <button class="icon-btn" id="resultsQrBtn" aria-label="Näytä QR-koodi" style="background:white;padding:2px">
       <div id="resultsQr" class="results-qr"></div>
     </button>
-    <button class="icon-btn" id="historyBtn" title="Kierrokset" aria-label="Kierrokset">📋</button>
   </div>
   <div class="screen no-bottom-bar">
-    <div id="resultsList"></div>
+    <div id="resultsContainer" class="results-container"></div>
     <div class="results-legend">Saldo = pisteet / pelit × 10</div>
   </div>
 </div>
@@ -682,7 +489,7 @@
 <!-- HISTORY -->
 <div id="historyScreen" class="hidden">
   <div class="topbar">
-    <button class="icon-btn" id="backFromHistoryBtn" aria-label="Takaisin tuloksiin">‹</button>
+    <button class="icon-btn" id="backFromHistoryBtn" aria-label="Takaisin">‹</button>
     <div class="topbar-title">Kierrokset</div>
     <select id="historyFilter" style="width:auto;max-width:150px;padding:6px 8px;font-size:0.85rem;min-height:40px">
       <option value="">Kaikki</option>
@@ -757,19 +564,49 @@
       <div class="menu-list">
         <button class="menu-item" id="menuShare">📤 Jaa tapahtuma</button>
         <button class="menu-item" id="menuResults">📊 Tulokset</button>
+        <button class="menu-item" id="menuHistory">📋 Kierrokset</button>
         <button class="menu-item" id="menuPairingEditor">🔄 Vaihda parit</button>
         <button class="menu-item" id="menuEditSettings">⚙️ Muokkaa tapahtumaa</button>
       </div>
       <div class="menu-divider"></div>
     </div>
-    <h3 id="appMenuUiTitle">Käyttöliittymä</h3>
-    <div id="appMenuUiControls"></div>
-    <div class="menu-divider"></div>
+    <div class="menu-list">
+      <button class="menu-item" id="menuUiSettings">🎨 Näyttöasetukset</button>
+    </div>
+    <div class="menu-divider" id="appMenuExitDivider"></div>
     <div id="appMenuExitSection">
       <button class="menu-item menu-item-danger" id="menuExit">✕ Poistu tapahtumasta</button>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="appMenuCloseBtn">Sulje</button>
+    </div>
+  </div>
+</div>
+
+<!-- UI SETTINGS MODAL -->
+<div id="uiSettingsModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-drag-handle"></div>
+    <h3>Näyttöasetukset</h3>
+    <div class="ui-section">
+      <span class="ui-label">Teema</span>
+      <div class="radio-row">
+        <label><input type="radio" name="uiTheme" value="auto"><span>Auto</span></label>
+        <label><input type="radio" name="uiTheme" value="light"><span>Vaalea</span></label>
+        <label><input type="radio" name="uiTheme" value="dark"><span>Tumma</span></label>
+      </div>
+    </div>
+    <div class="ui-section">
+      <span class="ui-label">Tekstikoko</span>
+      <div class="text-size-control">
+        <button class="size-btn" id="textSizeMinus" aria-label="Pienempi" type="button">−</button>
+        <div class="size-value" id="textSizeValue">100 %</div>
+        <button class="size-btn" id="textSizePlus" aria-label="Suurempi" type="button">+</button>
+      </div>
+      <input type="range" id="textSizeSlider" min="75" max="150" step="5" value="100" aria-label="Tekstikoko prosentteina">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="uiSettingsCloseBtn">Valmis</button>
     </div>
   </div>
 </div>
@@ -791,11 +628,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 // ============================================================
-// Käyttöliittymäasetukset (teema + tekstikoko)
+// Näyttöasetukset
 // ============================================================
+let uiScalePercent = 100;
+
 function updateThemeColorMeta() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
@@ -813,49 +652,44 @@ function applyTheme(theme) {
   updateThemeColorMeta();
 }
 
-function applyScale(scale) {
-  document.documentElement.style.setProperty('--text-scale', scale);
-  try { localStorage.setItem('mexicano_ui_scale', scale); } catch (e) {}
+function applyUiScale(percent) {
+  percent = Math.max(75, Math.min(150, Math.round(percent / 5) * 5));
+  uiScalePercent = percent;
+  document.documentElement.style.setProperty('--text-scale', String(percent / 100));
+  try { localStorage.setItem('mexicano_ui_scale', String(percent)); } catch (e) {}
+  updateUiScaleDisplay();
+}
+
+function updateUiScaleDisplay() {
+  const v = document.getElementById('textSizeValue');
+  const s = document.getElementById('textSizeSlider');
+  const minus = document.getElementById('textSizeMinus');
+  const plus = document.getElementById('textSizePlus');
+  if (v) v.textContent = uiScalePercent + ' %';
+  if (s) s.value = uiScalePercent;
+  if (minus) minus.disabled = uiScalePercent <= 75;
+  if (plus) plus.disabled = uiScalePercent >= 150;
 }
 
 function getThemeSetting() {
   try { return localStorage.getItem('mexicano_ui_theme') || 'auto'; } catch (e) { return 'auto'; }
 }
-function getScaleSetting() {
-  try { return localStorage.getItem('mexicano_ui_scale') || '1'; } catch (e) { return '1'; }
-}
 
-function renderUiControls(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
+function openUiSettings() {
   const theme = getThemeSetting();
-  const scale = getScaleSetting();
-  container.innerHTML = `
-    <div class="ui-section">
-      <span class="ui-label">Teema</span>
-      <div class="radio-row">
-        <label><input type="radio" name="uiTheme" value="auto" ${theme==='auto'?'checked':''}><span>Auto</span></label>
-        <label><input type="radio" name="uiTheme" value="light" ${theme==='light'?'checked':''}><span>Vaalea</span></label>
-        <label><input type="radio" name="uiTheme" value="dark" ${theme==='dark'?'checked':''}><span>Tumma</span></label>
-      </div>
-    </div>
-    <div class="ui-section">
-      <span class="ui-label">Tekstikoko</span>
-      <div class="radio-row size-row">
-        <label><input type="radio" name="uiScale" value="0.875" ${scale==='0.875'?'checked':''}><span>S</span></label>
-        <label><input type="radio" name="uiScale" value="1" ${scale==='1'?'checked':''}><span>M</span></label>
-        <label><input type="radio" name="uiScale" value="1.125" ${scale==='1.125'?'checked':''}><span>L</span></label>
-        <label><input type="radio" name="uiScale" value="1.25" ${scale==='1.25'?'checked':''}><span>XL</span></label>
-      </div>
-    </div>
-  `;
-  container.querySelectorAll('input[name="uiTheme"]').forEach(r => {
-    r.addEventListener('change', () => { if (r.checked) applyTheme(r.value); });
-  });
-  container.querySelectorAll('input[name="uiScale"]').forEach(r => {
-    r.addEventListener('change', () => { if (r.checked) applyScale(r.value); });
-  });
+  document.querySelectorAll('input[name="uiTheme"]').forEach(r => { r.checked = r.value === theme; });
+  const storedScale = localStorage.getItem('mexicano_ui_scale');
+  let pct = 100;
+  if (storedScale) {
+    const num = parseFloat(storedScale);
+    if (num >= 75 && num <= 150) pct = num;
+    else if (num > 0 && num <= 2) pct = Math.round(num * 100);
+  }
+  uiScalePercent = pct;
+  updateUiScaleDisplay();
+  document.getElementById('uiSettingsModal').classList.remove('hidden');
 }
+function closeUiSettings() { document.getElementById('uiSettingsModal').classList.add('hidden'); }
 
 // ============================================================
 // Americano
@@ -935,7 +769,7 @@ let scoreLockUntil = 0;
 let joinTimer = null;
 
 let state = {
-  players: [],
+  players: [],       // [{ name, active }]
   pairingType: 'mexicano',
   pairingMode: '1+4',
   scoringMode: 'score',
@@ -969,16 +803,9 @@ function addMyEvent(code, info = {}) {
   else events.push({ code, createdAt: Date.now(), lastActive: Date.now(), ...info });
   saveMyEvents(events);
 }
-function removeMyEvent(code) {
-  saveMyEvents(getMyEvents().filter(e => e.code !== code));
-}
-function saveLastPlayers(names) {
-  try { localStorage.setItem(LAST_PLAYERS_KEY, JSON.stringify(names)); } catch (e) {}
-}
-function getLastPlayers() {
-  try { const raw = localStorage.getItem(LAST_PLAYERS_KEY); return raw ? JSON.parse(raw) : null; }
-  catch (e) { return null; }
-}
+function removeMyEvent(code) { saveMyEvents(getMyEvents().filter(e => e.code !== code)); }
+function saveLastPlayers(names) { try { localStorage.setItem(LAST_PLAYERS_KEY, JSON.stringify(names)); } catch (e) {} }
+function getLastPlayers() { try { const raw = localStorage.getItem(LAST_PLAYERS_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
 
 function renderMyEvents() {
   const card = document.getElementById('myEventsCard');
@@ -1032,6 +859,16 @@ function setsEqual(a, b) {
   for (const x of b) if (!s.has(x)) return false;
   return true;
 }
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function getActiveIndices(players) {
+  return players.map((p, i) => (p.active !== false) ? i : -1).filter(i => i >= 0);
+}
 
 function calcStatPoints(match, winningScore, scoringMode) {
   if (match.winner !== 0 && match.winner !== 1 && match.winner !== 2) return { p1: 0, p2: 0 };
@@ -1062,22 +899,67 @@ function showScreen(name) {
   if (name === 'landing') renderMyEvents();
 }
 
-function showLoading(msg) {
-  document.getElementById('loadingOverlay').classList.remove('hidden');
-  document.getElementById('loadingMessage').textContent = msg;
-}
+function showLoading(msg) { document.getElementById('loadingOverlay').classList.remove('hidden'); document.getElementById('loadingMessage').textContent = msg; }
 function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
-function setLandingError(msg) {
-  const el = document.getElementById('landingError');
-  if (el) el.textContent = msg;
-}
+function setLandingError(msg) { const el = document.getElementById('landingError'); if (el) el.textContent = msg; }
 
-window.addEventListener('error', (e) => {
-  if (state.screen === 'landing') setLandingError('Virhe: ' + (e.message || 'tuntematon'));
-});
-window.addEventListener('unhandledrejection', (e) => {
-  if (state.screen === 'landing') setLandingError('Virhe: ' + (e.reason?.message || String(e.reason)));
-});
+window.addEventListener('error', (e) => { if (state.screen === 'landing') setLandingError('Virhe: ' + (e.message || 'tuntematon')); });
+window.addEventListener('unhandledrejection', (e) => { if (state.screen === 'landing') setLandingError('Virhe: ' + (e.reason?.message || String(e.reason))); });
+
+// ============================================================
+// Pelaajalistan muutokset (lisää/poista/nimeä uudelleen)
+// ============================================================
+function applyPlayerList(newNames) {
+  const oldPlayers = state.players || [];
+  const oldActiveIndices = oldPlayers.map((p, i) => (p.active !== false) ? i : -1).filter(i => i >= 0);
+  const oldActiveNames = oldActiveIndices.map(i => oldPlayers[i].name);
+
+  const nameToIndex = new Map();
+  oldPlayers.forEach((p, i) => { if (!nameToIndex.has(p.name)) nameToIndex.set(p.name, i); });
+
+  const newPlayers = oldPlayers.map(p => ({ name: p.name, active: p.active !== false }));
+  const usedIndices = new Set();
+  const newActiveOrder = [];
+
+  for (let i = 0; i < newNames.length; i++) {
+    const newName = newNames[i];
+    const oldName = oldActiveNames[i];
+
+    // Case A: nimi on jo olemassa (aktiivinen tai ei) → käytä uudelleen / aktivoi
+    if (nameToIndex.has(newName) && !usedIndices.has(nameToIndex.get(newName))) {
+      const idx = nameToIndex.get(newName);
+      newPlayers[idx].active = true;
+      usedIndices.add(idx);
+      newActiveOrder.push(idx);
+      continue;
+    }
+
+    // Case B: kohdassa oli vanha aktiivinen nimi joka poistuu, ja uusi nimi on uusi → nimenvaihdos
+    if (oldName !== undefined &&
+        !newNames.includes(oldName) &&
+        !nameToIndex.has(newName) &&
+        oldActiveIndices[i] !== undefined &&
+        !usedIndices.has(oldActiveIndices[i])) {
+      const idx = oldActiveIndices[i];
+      newPlayers[idx] = { ...newPlayers[idx], name: newName, active: true };
+      usedIndices.add(idx);
+      newActiveOrder.push(idx);
+      continue;
+    }
+
+    // Case C: täysin uusi pelaaja
+    const newIdx = newPlayers.length;
+    newPlayers.push({ name: newName, active: true });
+    usedIndices.add(newIdx);
+    newActiveOrder.push(newIdx);
+  }
+
+  // Poista käytöstä ne, jotka eivät ole uudessa listassa
+  const activeSet = new Set(newActiveOrder);
+  oldActiveIndices.forEach(i => { if (!activeSet.has(i)) newPlayers[i].active = false; });
+
+  return newPlayers;
+}
 
 // ============================================================
 // Tapahtumakoodi
@@ -1107,10 +989,7 @@ async function createNewEvent() {
     await set(ref(db, `events/${code}`), { createdAt: Date.now() });
     addMyEvent(code, { started: false });
     navigateToEvent(code);
-  } catch (e) {
-    hideLoading();
-    setLandingError('Virhe: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { hideLoading(); setLandingError('Virhe: ' + (e.message || 'tuntematon')); }
 }
 
 async function joinExistingEvent(code) {
@@ -1122,16 +1001,14 @@ async function joinExistingEvent(code) {
     const snap = await get(ref(db, `events/${code}`));
     if (!snap.exists()) { hideLoading(); setLandingError('Tapahtumaa ei löytynyt koodilla ' + code + '.'); return; }
     const s = snap.val().state;
+    const players = s?.players || [];
     addMyEvent(code, {
       started: !!(s && s.currentRound),
-      playerCount: s ? (s.players || []).length : 0,
+      playerCount: players.filter(p => p.active !== false).length,
       roundCount: s ? (s.rounds || []).length + (s.currentRound ? 1 : 0) : 0,
     });
     navigateToEvent(code);
-  } catch (e) {
-    hideLoading();
-    setLandingError('Virhe: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { hideLoading(); setLandingError('Virhe: ' + (e.message || 'tuntematon')); }
 }
 
 function navigateToEvent(code) {
@@ -1178,7 +1055,8 @@ function attachEventListener() {
       const wasInitializing = state.screen === 'initializing';
 
       if (s) {
-        state.players = s.players || [];
+        // Migraatio: vanha { name } → { name, active }
+        state.players = (s.players || []).map(p => ({ name: p.name || '?', active: p.active !== false }));
         state.pairingType = s.pairingType || 'mexicano';
         state.pairingMode = s.pairingMode || '1+4';
         state.scoringMode = s.scoringMode || 'win';
@@ -1194,8 +1072,9 @@ function attachEventListener() {
       if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) state.viewIdx = null;
 
       if (s) {
+        const activeCount = state.players.filter(p => p.active !== false).length;
         addMyEvent(eventCode, {
-          playerCount: (state.players || []).length,
+          playerCount: activeCount,
           roundCount: (state.rounds || []).length + (state.currentRound ? 1 : 0),
           started: !!state.currentRound,
         });
@@ -1230,37 +1109,52 @@ function generateRoundForState(st, existingRounds) {
   return generateMexicanoRound(st, existingRounds);
 }
 
+// ----- Americano -----
 function generateAmericanoRound(st, existingRounds) {
-  const n = st.players.length;
+  const activeIndices = getActiveIndices(st.players);
+  const n = activeIndices.length;
   const schedule = AMERICANO_SCHEDULES[n];
   if (!schedule || schedule.length === 0) return null;
+
   const scheduleLen = schedule.length;
   const roundInBlock = existingRounds.length % scheduleLen;
   const currentBlock = Math.floor(existingRounds.length / scheduleLen);
+
   let mapping;
-  if (st.americanoMapping && st.americanoBlock === currentBlock && st.americanoMapping.length === n) mapping = st.americanoMapping.slice();
-  else if (currentBlock === 0) mapping = Array.from({ length: n }, (_, i) => i);
-  else {
+  if (st.americanoMapping && st.americanoBlock === currentBlock && st.americanoMapping.length === n) {
+    mapping = st.americanoMapping.slice();
+  } else if (currentBlock === 0) {
     mapping = Array.from({ length: n }, (_, i) => i);
-    for (let i = mapping.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [mapping[i], mapping[j]] = [mapping[j], mapping[i]];
-    }
+  } else {
+    mapping = Array.from({ length: n }, (_, i) => i);
+    shuffleInPlace(mapping);
   }
+
   const roundSchedule = schedule[roundInBlock];
   if (!roundSchedule) return null;
+
   const matches = roundSchedule.map(md => ({
-    p1: [mapping[md[0]], mapping[md[1]]],
-    p2: [mapping[md[2]], mapping[md[3]]],
+    p1: [activeIndices[mapping[md[0]]], activeIndices[mapping[md[1]]]],
+    p2: [activeIndices[mapping[md[2]]], activeIndices[mapping[md[3]]]],
     winner: null, score1: null, score2: null,
   }));
+
   const playingSet = new Set();
   for (const m of matches) for (const pi of [...m.p1, ...m.p2]) playingSet.add(pi);
   const sitOuts = [];
-  for (let i = 0; i < n; i++) if (!playingSet.has(i)) sitOuts.push(i);
-  return { sitOuts, matches, tiebreakOrder: st.tiebreakOrder || Array.from({ length: n }, (_, i) => i), americanoMapping: mapping, americanoBlock: currentBlock };
+  for (const idx of activeIndices) if (!playingSet.has(idx)) sitOuts.push(idx);
+
+  return {
+    sitOuts, matches,
+    tiebreakOrder: st.tiebreakOrder && st.tiebreakOrder.length > 0
+      ? st.tiebreakOrder.filter(i => activeIndices.includes(i))
+      : [...activeIndices],
+    americanoMapping: mapping,
+    americanoBlock: currentBlock,
+  };
 }
 
+// ----- KoC -----
 function computeKocLevels(playerCount, rounds, courts, initialOrder) {
   let levels;
   if (initialOrder && initialOrder.length === playerCount) {
@@ -1301,84 +1195,112 @@ function deriveFromCourt(playerIdx, rounds, fallbackLevel) {
 
 function generateKocRound(st, existingRounds) {
   const n = st.players.length;
+  const activeIndices = getActiveIndices(st.players);
+  const activeCount = activeIndices.length;
   const courts = st.courts;
-  const sitOutCount = n - courts * 4;
+  const sitOutCount = activeCount - courts * 4;
   if (sitOutCount < 0 || courts < 2) return null;
+
+  const levels = computeKocLevels(n, existingRounds, courts, st.kocInitialOrder);
+
   const counts = new Array(n).fill(0);
   for (const r of existingRounds) for (const idx of r.sitOuts) counts[idx]++;
-  const isNewCycle = counts.every(c => c === counts[0]);
-  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n) ? st.tiebreakOrder.slice() : null;
-  if (isNewCycle || !tiebreakOrder) {
-    const all = Array.from({ length: n }, (_, i) => i);
-    for (let i = all.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [all[i], all[j]] = [all[j], all[i]];
-    }
-    const lastSit = st.lastRoundSitOuts || [];
-    const others = all.filter(i => !lastSit.includes(i));
-    const recent = all.filter(i => lastSit.includes(i));
-    tiebreakOrder = [...others, ...recent];
+
+  const hasPlayed = new Array(n).fill(false);
+  for (const r of existingRounds) {
+    for (const m of r.matches) for (const idx of [...m.p1, ...m.p2]) hasPlayed[idx] = true;
   }
+
+  const activeSet = new Set(activeIndices);
+  let tiebreakOrder;
+  if (st.tiebreakOrder && st.tiebreakOrder.length > 0) {
+    const filtered = st.tiebreakOrder.filter(i => activeSet.has(i));
+    const tbSet = new Set(filtered);
+    const missing = activeIndices.filter(i => !tbSet.has(i));
+    shuffleInPlace(missing);
+    tiebreakOrder = [...filtered, ...missing];
+  } else {
+    tiebreakOrder = [...activeIndices];
+    shuffleInPlace(tiebreakOrder);
+  }
+
+  const tiePos = new Array(n).fill(999999);
+  tiebreakOrder.forEach((idx, pos) => { tiePos[idx] = pos; });
+
+  const activeSorted = activeIndices.slice().sort((a, b) => {
+    const pa = hasPlayed[a] ? counts[a] * 10000 + tiePos[a] : 1e9 + tiePos[a];
+    const pb = hasPlayed[b] ? counts[b] * 10000 + tiePos[b] : 1e9 + tiePos[b];
+    return pa - pb;
+  });
+
+  const sitOutIndices = activeSorted.slice(0, sitOutCount);
+  const playing = activeSorted.slice(sitOutCount);
+  playing.sort((a, b) => levels[a] - levels[b] || tiePos[a] - tiePos[b]);
+
   let kocInitialOrder = st.kocInitialOrder;
   if (!kocInitialOrder || kocInitialOrder.length !== n) {
     kocInitialOrder = Array.from({ length: n }, (_, i) => i);
-    for (let i = kocInitialOrder.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [kocInitialOrder[i], kocInitialOrder[j]] = [kocInitialOrder[j], kocInitialOrder[i]];
-    }
+    shuffleInPlace(kocInitialOrder);
   }
-  const levels = computeKocLevels(n, existingRounds, courts, kocInitialOrder);
-  const tiePos = new Array(n);
-  for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
-  const sorted = Array.from({ length: n }, (_, i) => i);
-  sorted.sort((a, b) => {
-    if (counts[a] !== counts[b]) return counts[a] - counts[b];
-    return tiePos[a] - tiePos[b];
-  });
-  const sitOutIndices = sorted.slice(0, sitOutCount);
-  const playing = sorted.slice(sitOutCount);
-  playing.sort((a, b) => levels[a] - levels[b] || tiePos[a] - tiePos[b]);
+
   const matches = [];
   for (let c = 0; c < courts; c++) {
     const group = playing.slice(c * 4, c * 4 + 4);
-    if (group.length < 4) { matches.push({ p1: group.slice(0, 2), p2: group.slice(2, 4), winner: null, score1: null, score2: null }); continue; }
+    if (group.length < 4) break;
     const infos = group.map(idx => ({ idx, from: deriveFromCourt(idx, existingRounds, levels[idx]) }));
     infos.sort((a, b) => { if (a.from !== b.from) return a.from - b.from; return a.idx - b.idx; });
-    const p1 = [infos[0].idx, infos[2].idx];
-    const p2 = [infos[1].idx, infos[3].idx];
-    matches.push({ p1, p2, winner: null, score1: null, score2: null });
+    matches.push({ p1: [infos[0].idx, infos[2].idx], p2: [infos[1].idx, infos[3].idx], winner: null, score1: null, score2: null });
   }
+
   return { sitOuts: sitOutIndices, matches, tiebreakOrder, kocInitialOrder };
 }
 
+// ----- Mexicano -----
 function generateMexicanoRound(st, existingRounds) {
   const n = st.players.length;
-  const sitOutCount = n - st.courts * 4;
+  const activeIndices = getActiveIndices(st.players);
+  const activeCount = activeIndices.length;
+  const sitOutCount = activeCount - st.courts * 4;
   if (sitOutCount < 0) return null;
+
   const counts = new Array(n).fill(0);
   for (const r of existingRounds) for (const idx of r.sitOuts) counts[idx]++;
-  const isNewCycle = counts.every(c => c === counts[0]);
-  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n) ? st.tiebreakOrder.slice() : null;
-  if (isNewCycle || !tiebreakOrder) {
-    const all = Array.from({ length: n }, (_, i) => i);
-    for (let i = all.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [all[i], all[j]] = [all[j], all[i]];
-    }
+
+  const hasPlayed = new Array(n).fill(false);
+  for (const r of existingRounds) {
+    for (const m of r.matches) for (const idx of [...m.p1, ...m.p2]) hasPlayed[idx] = true;
+  }
+
+  const activeSet = new Set(activeIndices);
+  let tiebreakOrder;
+  if (st.tiebreakOrder && st.tiebreakOrder.length > 0) {
+    const filtered = st.tiebreakOrder.filter(i => activeSet.has(i));
+    const tbSet = new Set(filtered);
+    const missing = activeIndices.filter(i => !tbSet.has(i));
+    shuffleInPlace(missing);
+    tiebreakOrder = [...filtered, ...missing];
+  } else {
+    const all = [...activeIndices];
+    shuffleInPlace(all);
     const lastSit = st.lastRoundSitOuts || [];
     const others = all.filter(i => !lastSit.includes(i));
     const recent = all.filter(i => lastSit.includes(i));
     tiebreakOrder = [...others, ...recent];
   }
-  const tiePos = new Array(n);
-  for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
-  const sorted = Array.from({ length: n }, (_, i) => i);
-  sorted.sort((a, b) => {
-    if (counts[a] !== counts[b]) return counts[a] - counts[b];
-    return tiePos[a] - tiePos[b];
+
+  const tiePos = new Array(n).fill(999999);
+  tiebreakOrder.forEach((idx, pos) => { tiePos[idx] = pos; });
+
+  const activeSorted = activeIndices.slice().sort((a, b) => {
+    const pa = hasPlayed[a] ? counts[a] * 10000 + tiePos[a] : 1e9 + tiePos[a];
+    const pb = hasPlayed[b] ? counts[b] * 10000 + tiePos[b] : 1e9 + tiePos[b];
+    return pa - pb;
   });
-  const sitOutIndices = sorted.slice(0, sitOutCount);
-  const playing = sorted.slice(sitOutCount);
+
+  const sitOutIndices = activeSorted.slice(0, sitOutCount);
+  const playing = activeSorted.slice(sitOutCount);
+
+  // Stats kaikista kierroksista
   const stats = st.players.map(() => ({ points: 0, wins: 0 }));
   for (const r of existingRounds) {
     for (const m of r.matches) {
@@ -1392,19 +1314,23 @@ function generateMexicanoRound(st, existingRounds) {
       }
     }
   }
+
   playing.sort((a, b) => {
     if (stats[b].points !== stats[a].points) return stats[b].points - stats[a].points;
     if (stats[b].wins !== stats[a].wins) return stats[b].wins - stats[a].wins;
     return a - b;
   });
+
   const matches = [];
   for (let c = 0; c < st.courts; c++) {
     const g = playing.slice(c * 4, c * 4 + 4);
+    if (g.length < 4) break;
     let p1, p2;
     if (st.pairingMode === '1+4') { p1 = [g[0], g[3]]; p2 = [g[1], g[2]]; }
     else { p1 = [g[0], g[2]]; p2 = [g[1], g[3]]; }
     matches.push({ p1, p2, winner: null, score1: null, score2: null });
   }
+
   return { sitOuts: sitOutIndices, matches, tiebreakOrder };
 }
 
@@ -1414,9 +1340,9 @@ function generateMexicanoRound(st, existingRounds) {
 function computeStats() {
   const stats = state.players.map(() => ({ points: 0, wins: 0, games: 0, sitOuts: 0 }));
   for (const round of state.rounds) {
-    for (const idx of round.sitOuts) stats[idx].sitOuts++;
+    for (const idx of round.sitOuts) if (stats[idx]) stats[idx].sitOuts++;
     for (const m of round.matches) {
-      for (const idx of [...m.p1, ...m.p2]) stats[idx].games++;
+      for (const idx of [...m.p1, ...m.p2]) if (stats[idx]) stats[idx].games++;
       if (m.winner === 0 || m.winner === 1 || m.winner === 2) {
         if (m.winner === 0) for (const idx of m.p1) stats[idx].wins++;
         else if (m.winner === 1) for (const idx of m.p2) stats[idx].wins++;
@@ -1433,8 +1359,23 @@ function computeStats() {
 // ============================================================
 // Setup
 // ============================================================
+function parsePlayerNames(text) {
+  return text.split('\n').map(s => s.trim()).filter(Boolean);
+}
+
+function renderInactiveHint() {
+  const el = document.getElementById('inactiveHint');
+  if (!el) return;
+  const inactive = state.players.filter(p => p.active === false);
+  if (!inactive.length) { el.innerHTML = ''; return; }
+  el.innerHTML = 'Ei mukana (napauta lisätäksesi): ' +
+    inactive.map(p => `<button class="hint-add-btn" type="button" data-name="${esc(p.name)}">${esc(p.name)}</button>`).join(' ');
+}
+
 function renderSetup() {
-  document.getElementById('playersInput').value = state.players.map(p => p.name).join('\n');
+  const activeNames = state.players.filter(p => p.active !== false).map(p => p.name);
+  document.getElementById('playersInput').value = activeNames.join('\n');
+
   const pt = document.querySelector(`input[name="pairingType"][value="${state.pairingType || 'mexicano'}"]`);
   if (pt) pt.checked = true;
   const pr = document.querySelector(`input[name="pairingMode"][value="${state.pairingMode}"]`);
@@ -1443,6 +1384,7 @@ function renderSetup() {
   if (sr) sr.checked = true;
   document.getElementById('courtsInput').value = state.courts;
   document.getElementById('winningScoreInput').value = state.winningScore;
+
   updatePairingTypeVisibility();
   updateWinningScoreVisibility();
 
@@ -1452,23 +1394,18 @@ function renderSetup() {
   document.getElementById('cancelSettingsBtn').style.display = isMidEvent ? 'block' : 'none';
   document.getElementById('startBtn').textContent = isMidEvent ? 'Tallenna asetukset' : 'Aloita';
 
-  // Prefill-painike
   const lastPlayers = getLastPlayers();
+  const ta = document.getElementById('playersInput');
   const btn = document.getElementById('useLastPlayersBtn');
-  if (lastPlayers && lastPlayers.length > 0 && document.getElementById('playersInput').value.trim() === '') {
-    btn.textContent = `Käytä viimeisintä listaa (${lastPlayers.length})`;
-    btn.classList.remove('hidden');
-  } else if (lastPlayers && lastPlayers.length > 0) {
+  if (lastPlayers && lastPlayers.length > 0 && ta.value.trim() === '') {
     btn.textContent = `Käytä viimeisintä listaa (${lastPlayers.length})`;
     btn.classList.remove('hidden');
   } else {
     btn.classList.add('hidden');
   }
-  updateSetupHelpers();
-}
 
-function parsePlayers(text) {
-  return text.split('\n').map(s => s.trim()).filter(Boolean).map(name => ({ name }));
+  renderInactiveHint();
+  updateSetupHelpers();
 }
 
 function updatePairingTypeVisibility() {
@@ -1491,9 +1428,12 @@ function getScheduleCourts(playerCount) {
 }
 
 function updateSetupHelpers() {
-  const names = parsePlayers(document.getElementById('playersInput').value);
+  const names = parsePlayerNames(document.getElementById('playersInput').value);
   const n = names.length;
-  document.getElementById('playerCountHelper').textContent = `${n} pelaajaa`;
+  const inactiveCount = state.players.filter(p => p.active === false).length;
+  document.getElementById('playerCountHelper').textContent =
+    `${n} pelaajaa` + (inactiveCount > 0 ? ` · ${inactiveCount} ei mukana` : '');
+
   const maxCourts = Math.max(1, Math.floor(n / 4));
   const ci = document.getElementById('courtsInput');
   const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
@@ -1554,8 +1494,14 @@ function updateSetupHelpers() {
 async function applySettings() {
   const errEl = document.getElementById('setupError');
   errEl.textContent = '';
-  const names = parsePlayers(document.getElementById('playersInput').value);
-  if (names.length < 4) { errEl.textContent = 'Tarvitaan vähintään 4 pelaajaa.'; return; }
+  const newNames = parsePlayerNames(document.getElementById('playersInput').value);
+  if (newNames.length < 4) { errEl.textContent = 'Tarvitaan vähintään 4 pelaajaa.'; return; }
+
+  // Duplikaatit
+  const seen = new Set(); const dupes = new Set();
+  newNames.forEach(n => { if (seen.has(n)) dupes.add(n); else seen.add(n); });
+  if (dupes.size > 0) { errEl.textContent = 'Sama nimi kahdesti: ' + [...dupes].join(', '); return; }
+
   const pairingType = document.querySelector('input[name="pairingType"]:checked').value;
   const pairingMode = document.querySelector('input[name="pairingMode"]:checked').value;
   const scoringMode = document.querySelector('input[name="scoringMode"]:checked').value;
@@ -1564,29 +1510,44 @@ async function applySettings() {
   const winningScore = isNaN(winningScoreRaw) || winningScoreRaw < 0 ? 0 : winningScoreRaw;
 
   if (pairingType === 'koc') {
-    if (names.length < 8) { errEl.textContent = 'King of the Court vaatii vähintään 8 pelaajaa.'; return; }
+    if (newNames.length < 8) { errEl.textContent = 'King of the Court vaatii vähintään 8 pelaajaa.'; return; }
     if (isNaN(courts) || courts < 2) { errEl.textContent = 'King of the Court vaatii vähintään 2 kenttää.'; return; }
   }
 
+  if (pairingType === 'americano' && Object.keys(AMERICANO_SCHEDULES).length === 0) {
+    showLoading('Ladataan Americano-taulukoita...');
+    await loadAmericanoSchedules(true);
+    hideLoading();
+  }
+
+  // Pelaajalistan käsittely (lisää/poista/nimenvaihdos)
+  const newPlayers = applyPlayerList(newNames);
+  const activeCount = newPlayers.filter(p => p.active).length;
+
+  if (activeCount < 4) { errEl.textContent = 'Tarvitaan vähintään 4 aktiivista pelaajaa.'; return; }
+
   if (pairingType === 'americano') {
-    if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
-      showLoading('Ladataan Americano-taulukoita...');
-      await loadAmericanoSchedules(true);
-      hideLoading();
-    }
-    const sched = AMERICANO_SCHEDULES[names.length];
+    const sched = AMERICANO_SCHEDULES[activeCount];
     if (!sched || sched.length === 0) {
-      errEl.textContent = `Americano-taulukkoa ei löytynyt ${names.length} pelaajalle.`;
+      errEl.textContent = `Americano-taulukkoa ei löytynyt ${activeCount} pelaajalle.`;
       return;
     }
     courts = sched[0].length;
   }
 
-  const maxCourts = Math.floor(names.length / 4);
+  const maxCourts = Math.floor(activeCount / 4);
   if (isNaN(courts) || courts < 1) { errEl.textContent = 'Kenttiä vähintään 1.'; return; }
   if (courts > maxCourts) { errEl.textContent = `Kenttiä enintään ${maxCourts}.`; return; }
 
-  const playersChanged = JSON.stringify(names.map(p => p.name)) !== JSON.stringify(state.players.map(p => p.name));
+  // Muutosten tunnistus
+  const oldSig = JSON.stringify(state.players.map(p => ({ name: p.name, active: p.active !== false })));
+  const newSig = JSON.stringify(newPlayers.map(p => ({ name: p.name, active: !!p.active })));
+  const playersChanged = oldSig !== newSig;
+
+  const oldActiveCount = state.players.filter(p => p.active !== false).length;
+  const activeCountChanged = oldActiveCount !== activeCount;
+  const rosterChanged = playersChanged || activeCountChanged;
+
   const pairingTypeChanged = (state.pairingType || 'mexicano') !== pairingType;
   const courtsChanged = state.courts !== courts;
   const pairingChanged = state.pairingMode !== pairingMode;
@@ -1597,75 +1558,88 @@ async function applySettings() {
   let resetRounds = false;
   let regenerateCurrent = false;
   if (editingStartedMidEvent) {
-    if (playersChanged) {
-      if (!confirm('Pelaajalista muuttui. Tämä nollaa kierrokset. Jatketaanko?')) return;
-      resetRounds = true; regenerateCurrent = true;
-    } else if (pairingTypeChanged) {
+    if (pairingTypeChanged) {
       if (!confirm('Paritustyypin muutos nollaa kierrokset. Jatketaanko?')) return;
-      resetRounds = true; regenerateCurrent = true;
-    } else if (courtsChanged || pairingChanged) {
+      resetRounds = true;
+    }
+    // HUOM: pelaajalistan muutokset eivät enää nollaa kierroksia.
+    if (!resetRounds && (courtsChanged || pairingChanged)) {
       if (anyResults && !confirm('Asetukset muuttuivat. Nykyisen kierroksen tulokset menetetään. Jatketaanko?')) return;
       regenerateCurrent = true;
-    } else if (anyResults && (scoringModeChanged || winningScoreChanged)) {
-      if (!confirm('Pistelaskenta muuttuu. Kaikki tilastot lasketaan uusilla asetuksilla. Jatketaanko?')) return;
+    }
+    if (!resetRounds && !regenerateCurrent && anyResults && (scoringModeChanged || winningScoreChanged)) {
+      if (!confirm('Pistelaskenta muuttuu. Tilastot lasketaan uusilla asetuksilla. Jatketaanko?')) return;
     }
   }
 
   const newState = {
-    players: names, pairingType, pairingMode, scoringMode, winningScore, courts,
+    players: newPlayers,
+    pairingType,
+    pairingMode,
+    scoringMode,
+    winningScore,
+    courts,
     rounds: resetRounds ? [] : state.rounds,
   };
 
-  const needRegenerate = !state.currentRound || resetRounds || regenerateCurrent;
+  if (rosterChanged) {
+    newState.americanoMapping = null;
+    newState.americanoBlock = 0;
+    newState.kocInitialOrder = null;
+  } else {
+    newState.americanoMapping = resetRounds ? null : (state.americanoMapping || null);
+    newState.americanoBlock = resetRounds ? 0 : (state.americanoBlock || 0);
+    newState.kocInitialOrder = resetRounds ? null : (state.kocInitialOrder || null);
+  }
+
+  const needRegenerate = !state.currentRound || resetRounds || regenerateCurrent ||
+                         (rosterChanged && !anyResults);
+
   if (needRegenerate) {
     let lastSitOuts = [];
     if (!resetRounds && state.currentRound) lastSitOuts = state.currentRound.sitOuts || [];
     else if (!resetRounds && state.rounds.length > 0) lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
     const stForGen = {
-      players: names, pairingType, pairingMode, courts, scoringMode, winningScore,
-      tiebreakOrder: resetRounds ? [] : state.tiebreakOrder,
+      players: newPlayers,
+      pairingType, pairingMode, courts, scoringMode, winningScore,
+      tiebreakOrder: resetRounds ? [] : (state.tiebreakOrder || []),
       lastRoundSitOuts: lastSitOuts,
-      americanoMapping: resetRounds ? null : state.americanoMapping,
-      americanoBlock: resetRounds ? 0 : state.americanoBlock,
-      kocInitialOrder: resetRounds ? null : state.kocInitialOrder,
+      americanoMapping: newState.americanoMapping,
+      americanoBlock: newState.americanoBlock,
+      kocInitialOrder: newState.kocInitialOrder,
     };
     const gen = generateRoundForState(stForGen, newState.rounds);
     if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui.'; return; }
     newState.currentRound = { sitOuts: gen.sitOuts, matches: gen.matches };
     newState.tiebreakOrder = gen.tiebreakOrder;
     if (gen.americanoMapping !== undefined) {
-      newState.americanoMapping = gen.americanoMapping; newState.americanoBlock = gen.americanoBlock;
-    } else {
-      newState.americanoMapping = resetRounds ? null : (state.americanoMapping || null);
-      newState.americanoBlock = resetRounds ? 0 : (state.americanoBlock || 0);
+      newState.americanoMapping = gen.americanoMapping;
+      newState.americanoBlock = gen.americanoBlock;
     }
     if (gen.kocInitialOrder !== undefined) newState.kocInitialOrder = gen.kocInitialOrder;
-    else newState.kocInitialOrder = resetRounds ? null : (state.kocInitialOrder || null);
   } else {
     newState.currentRound = state.currentRound;
     newState.tiebreakOrder = state.tiebreakOrder;
-    newState.americanoMapping = state.americanoMapping;
-    newState.americanoBlock = state.americanoBlock;
-    newState.kocInitialOrder = state.kocInitialOrder;
   }
 
   showLoading('Tallennetaan...');
   try {
     await set(ref(db, `events/${eventCode}/state`), newState);
-    // Tallenna viimeisin pelaajalista
-    saveLastPlayers(names.map(p => p.name));
+    saveLastPlayers(newPlayers.filter(p => p.active).map(p => p.name));
     hideLoading();
-    Object.assign(state, {
-      players: newState.players, pairingType: newState.pairingType,
-      pairingMode: newState.pairingMode, scoringMode: newState.scoringMode,
-      winningScore: newState.winningScore, courts: newState.courts,
-      rounds: newState.rounds, currentRound: newState.currentRound,
-      tiebreakOrder: newState.tiebreakOrder,
-      americanoMapping: newState.americanoMapping || null,
-      americanoBlock: newState.americanoBlock || 0,
-      kocInitialOrder: newState.kocInitialOrder || null,
-      viewIdx: null,
-    });
+    state.players = newPlayers;
+    state.pairingType = pairingType;
+    state.pairingMode = pairingMode;
+    state.scoringMode = scoringMode;
+    state.winningScore = winningScore;
+    state.courts = courts;
+    state.rounds = newState.rounds;
+    state.currentRound = newState.currentRound;
+    state.tiebreakOrder = newState.tiebreakOrder;
+    state.americanoMapping = newState.americanoMapping || null;
+    state.americanoBlock = newState.americanoBlock || 0;
+    state.kocInitialOrder = newState.kocInitialOrder || null;
+    state.viewIdx = null;
     showScreen('main');
     renderMain();
   } catch (e) {
@@ -1684,27 +1658,20 @@ function getViewData() {
   return { isCurrent: false, round: state.rounds[state.viewIdx], roundNumber: state.viewIdx + 1, idx: state.viewIdx };
 }
 
-function getTypeLabel() {
-  if (state.pairingType === 'koc') return 'King of the Court';
-  if (state.pairingType === 'americano') return 'Americano';
-  return 'Mexicano';
-}
-
 function renderMain() {
   const vd = getViewData();
   if (!vd.round) return;
 
-  // Topbar
   const total = state.rounds.length + 1;
+  const activeCount = state.players.filter(p => p.active !== false).length;
   const info = document.getElementById('topbarMainInfo');
-  info.innerHTML = `K ${vd.roundNumber}/${total}<span class="dot">·</span>${state.players.length}p`
-    + (vd.isCurrent ? '' : '<span class="past-tag">mennyt</span>');
+  // Ei "mennyt"-tagia
+  info.innerHTML = `K ${vd.roundNumber}/${total}<span class="dot">·</span>${activeCount}p`;
   document.getElementById('prevRoundBtn').disabled = !canGoBack();
   document.getElementById('nextRoundArrowBtn').disabled = !canGoForward();
   document.getElementById('pastRoundBanner').classList.toggle('hidden', vd.isCurrent);
 
-  // Sitout
-  const sitoutNames = vd.round.sitOuts.map(i => state.players[i].name);
+  const sitoutNames = vd.round.sitOuts.map(i => state.players[i]?.name || '?');
   const sitoutBanner = document.getElementById('sitoutBanner');
   if (sitoutNames.length > 0) {
     sitoutBanner.classList.remove('hidden');
@@ -1713,7 +1680,6 @@ function renderMain() {
     sitoutBanner.classList.add('hidden');
   }
 
-  // Kenttärivit — SÄILYTETTY ENNALLAAN
   const container = document.getElementById('courtsContainer');
   container.innerHTML = '';
   const list = document.createElement('div');
@@ -1763,7 +1729,7 @@ function renderMain() {
 function makeCompactPair(vd, match, pairIdx, matchIdx) {
   const pair = pairIdx === 0 ? match.p1 : match.p2;
   const isWinner = match.winner === pairIdx;
-  const names = pair.map(i => state.players[i].name);
+  const names = pair.map(i => state.players[i]?.name || '?');
 
   const btn = document.createElement('button');
   btn.className = 'compact-pair' + (isWinner ? ' winner' : '');
@@ -1825,7 +1791,7 @@ function matchPath(vd, matchIdx) {
 }
 
 async function selectWinner(vd, matchIdx, pairIdx) {
-  if (Date.now() < scoreLockUntil) return; // Estä tuplanapautus
+  if (Date.now() < scoreLockUntil) return;
   scoreLockUntil = Date.now() + 250;
   const m = vd.round.matches[matchIdx];
   const p = matchPath(vd, matchIdx);
@@ -1837,9 +1803,7 @@ async function selectWinner(vd, matchIdx, pairIdx) {
     }
     if (m.winner === pairIdx) await update(ref(db, p), { winner: null, score1: null, score2: null });
     else await update(ref(db, p), { winner: pairIdx, score1: pairIdx === 0 ? 1 : 0, score2: pairIdx === 0 ? 0 : 1 });
-  } catch (e) {
-    alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon')); }
 }
 
 // ============================================================
@@ -1849,8 +1813,8 @@ function openScoreModal(vd, matchIdx) {
   const m = vd.round.matches[matchIdx];
   editingMatchIdx = { vd, matchIdx };
   document.getElementById('scoreModalTitle').textContent = `Kenttä ${matchIdx + 1}${vd.isCurrent ? '' : ' (mennyt)'}`;
-  document.getElementById('scorePair1Label').textContent = m.p1.map(i => state.players[i].name).join(' + ');
-  document.getElementById('scorePair2Label').textContent = m.p2.map(i => state.players[i].name).join(' + ');
+  document.getElementById('scorePair1Label').textContent = m.p1.map(i => state.players[i]?.name || '?').join(' + ');
+  document.getElementById('scorePair2Label').textContent = m.p2.map(i => state.players[i]?.name || '?').join(' + ');
   document.getElementById('score1Input').value = typeof m.score1 === 'number' ? m.score1 : '';
   document.getElementById('score2Input').value = typeof m.score2 === 'number' ? m.score2 : '';
   const targetEl = document.getElementById('scoreModalTarget');
@@ -1862,10 +1826,7 @@ function openScoreModal(vd, matchIdx) {
   document.getElementById('scoreModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('score1Input').focus(), 100);
 }
-function closeScoreModal() {
-  document.getElementById('scoreModal').classList.add('hidden');
-  editingMatchIdx = -1;
-}
+function closeScoreModal() { document.getElementById('scoreModal').classList.add('hidden'); editingMatchIdx = -1; }
 async function saveScoreModal() {
   if (!editingMatchIdx) return;
   const s1 = parseInt(document.getElementById('score1Input').value, 10);
@@ -1880,9 +1841,7 @@ async function saveScoreModal() {
     if (s1 === s2) await update(ref(db, p), { winner: 2, score1: s1, score2: s2 });
     else await update(ref(db, p), { winner: s1 > s2 ? 0 : 1, score1: s1, score2: s2 });
     closeScoreModal();
-  } catch (e) {
-    errEl.textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
-  }
+  } catch (e) { errEl.textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon'); }
 }
 
 // ============================================================
@@ -1901,10 +1860,7 @@ function openPairingEditor() {
   renderPairingEditor();
   document.getElementById('pairingEditorModal').classList.remove('hidden');
 }
-function closePairingEditor() {
-  document.getElementById('pairingEditorModal').classList.add('hidden');
-  pairingEditorState = null;
-}
+function closePairingEditor() { document.getElementById('pairingEditorModal').classList.add('hidden'); pairingEditorState = null; }
 function samePos(a, b) {
   if (!a || !b) return false;
   if (a.type !== b.type) return false;
@@ -1917,11 +1873,15 @@ function renderPairingEditor() {
   let html = '';
   pairingEditorState.matches.forEach((m, ci) => {
     html += `<div class="pe-court"><div class="pe-court-label">Kenttä ${ci + 1}</div>`;
+    // Parit allekkain
     html += `<div class="pe-pair-row">`;
     m.p1.forEach((pi, slot) => { html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 0, slot }, pi); });
-    html += `</div><div class="pe-pair-row">`;
+    html += `</div>`;
+    html += `<div class="pe-pair-vs">vs</div>`;
+    html += `<div class="pe-pair-row">`;
     m.p2.forEach((pi, slot) => { html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 1, slot }, pi); });
-    html += `</div></div>`;
+    html += `</div>`;
+    html += `</div>`;
   });
   if (pairingEditorState.sitOuts.length) {
     html += `<div class="pe-sitout-section"><div class="pe-court-label">Tauolla</div><div class="pe-sitout-list">`;
@@ -1932,7 +1892,7 @@ function renderPairingEditor() {
 }
 function renderPePlayer(pos, playerIdx) {
   const isSel = pairingEditorState.selected && samePos(pairingEditorState.selected, pos);
-  return `<button type="button" class="pe-player${isSel ? ' pe-selected' : ''}" data-pos='${JSON.stringify(pos).replace(/'/g, "&#39;")}'>${esc(state.players[playerIdx].name)}</button>`;
+  return `<button type="button" class="pe-player${isSel ? ' pe-selected' : ''}" data-pos='${JSON.stringify(pos).replace(/'/g, "&#39;")}'>${esc(state.players[playerIdx]?.name || '?')}</button>`;
 }
 function getPlayerAtPos(pos) {
   if (pos.type === 'court') return pairingEditorState.matches[pos.courtIdx][pos.pair === 0 ? 'p1' : 'p2'][pos.slot];
@@ -1942,10 +1902,7 @@ function setPlayerAtPos(pos, playerIdx) {
   if (pos.type === 'court') pairingEditorState.matches[pos.courtIdx][pos.pair === 0 ? 'p1' : 'p2'][pos.slot] = playerIdx;
   else pairingEditorState.sitOuts[pos.sitoutIdx] = playerIdx;
 }
-function swapPairingEditorPlayers(a, b) {
-  const pa = getPlayerAtPos(a); const pb = getPlayerAtPos(b);
-  setPlayerAtPos(a, pb); setPlayerAtPos(b, pa);
-}
+function swapPairingEditorPlayers(a, b) { const pa = getPlayerAtPos(a); const pb = getPlayerAtPos(b); setPlayerAtPos(a, pb); setPlayerAtPos(b, pa); }
 function handlePairingEditorClick(e) {
   const btn = e.target.closest('.pe-player');
   if (!btn || !pairingEditorState) return;
@@ -1975,10 +1932,7 @@ async function savePairingEditor() {
     for (const u of updates) await set(ref(db, `events/${eventCode}/state/currentRound/matches/${u.i}`), { p1: u.p1, p2: u.p2 });
     if (sitOutsChanged) await set(ref(db, `events/${eventCode}/state/currentRound/sitOuts`), sitOuts);
     hideLoading(); closePairingEditor();
-  } catch (e) {
-    hideLoading();
-    alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { hideLoading(); alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon')); }
 }
 
 // ============================================================
@@ -1995,8 +1949,9 @@ async function nextRound() {
       if (!current.currentRound.matches.every(m => m.winner === 0 || m.winner === 1 || m.winner === 2)) return current;
       const lastSitOuts = current.currentRound.sitOuts || [];
       const allRounds = [...(current.rounds || []), current.currentRound];
+      const curPlayers = (current.players || []).map(p => ({ name: p.name, active: p.active !== false }));
       const gen = generateRoundForState({
-        players: current.players,
+        players: curPlayers,
         pairingType: current.pairingType || 'mexicano',
         pairingMode: current.pairingMode,
         courts: current.courts,
@@ -2025,13 +1980,11 @@ async function nextRound() {
     state.viewIdx = null;
     renderMain();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (e) {
-    alert('Kierroksen vaihto epäonnistui: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { alert('Kierroksen vaihto epäonnistui: ' + (e.message || 'tuntematon')); }
 }
 
 // ============================================================
-// Tulokset – korttilista
+// Tulokset – taulukko (2 saraketta leveällä näytöllä + >6 pelaajaa)
 // ============================================================
 function renderResultsQr() {
   const container = document.getElementById('resultsQr');
@@ -2047,32 +2000,66 @@ function renderResultsQr() {
 
 function renderResults() {
   const stats = computeStats();
-  const rows = state.players.map((p, i) => ({ name: p.name, ...stats[i] }));
+  const allRows = state.players.map((p, i) => ({
+    name: p.name, idx: i, active: p.active !== false, ...stats[i]
+  }));
+  // Näytä aktiiviset + ne, joilla on historiassa pelejä tai taukoja
+  const rows = allRows.filter(r => r.active || r.games > 0 || r.sitOuts > 0);
   rows.forEach(r => { r.saldo = r.games > 0 ? (r.points / r.games) * 10 : 0; });
   rows.sort((a, b) => {
     if (b.saldo !== a.saldo) return b.saldo - a.saldo;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.games - a.games;
   });
-  const topSaldo = rows.length ? rows[0].saldo : 0;
-  document.getElementById('resultsList').innerHTML = rows.map((r, idx) => {
-    const isRank1 = r.saldo === topSaldo && topSaldo > 0;
-    return `
-      <div class="result-card${isRank1 ? ' rank-1' : ''}">
-        <div class="result-rank">${idx + 1}</div>
-        <div class="result-main">
-          <div class="result-name">${esc(r.name)}</div>
-          <div class="result-stats">${r.points} p · ${r.wins} V · ${r.games} P · ${r.sitOuts} T</div>
-        </div>
-        <div class="result-saldo">${r.saldo.toFixed(1)}</div>
-      </div>
-    `;
-  }).join('');
+
+  if (rows.length === 0) {
+    document.getElementById('resultsContainer').innerHTML = '<div class="history-empty">Ei pelaajia</div>';
+    document.getElementById('resultsContainer').classList.remove('split');
+    return;
+  }
+
+  const topSaldo = rows[0].saldo;
+  const useSplit = window.matchMedia('(min-width: 768px)').matches && rows.length > 6;
+
+  function renderTable(slice, offset) {
+    let html = `<table class="results-table"><thead><tr>
+      <th>Nimi</th>
+      <th class="num">Saldo</th>
+      <th class="num">Pisteet</th>
+      <th class="num">Voitot</th>
+      <th class="num">Pelit</th>
+      <th class="num">Tauot</th>
+    </tr></thead><tbody>`;
+    slice.forEach((r, i) => {
+      const rank = offset + i + 1;
+      const isRank1 = r.saldo === topSaldo && topSaldo > 0;
+      html += `<tr${isRank1 ? ' class="rank-1"' : ''}>
+        <td class="name-cell"><span class="rank-num">${rank}.</span>${esc(r.name)}</td>
+        <td class="num">${r.saldo.toFixed(1)}</td>
+        <td class="num">${r.points}</td>
+        <td class="num">${r.wins}</td>
+        <td class="num">${r.games}</td>
+        <td class="num">${r.sitOuts}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  const container = document.getElementById('resultsContainer');
+  if (useSplit) {
+    const mid = Math.ceil(rows.length / 2);
+    container.classList.add('split');
+    container.innerHTML = renderTable(rows.slice(0, mid), 0) + renderTable(rows.slice(mid), mid);
+  } else {
+    container.classList.remove('split');
+    container.innerHTML = renderTable(rows, 0);
+  }
   renderResultsQr();
 }
 
 // ============================================================
-// Historia – pystylista
+// Historia
 // ============================================================
 function getAllRounds() {
   const all = [...state.rounds];
@@ -2081,8 +2068,8 @@ function getAllRounds() {
 }
 
 function formatMatchText(m) {
-  const p1 = m.p1.map(i => state.players[i].name).join(' + ');
-  const p2 = m.p2.map(i => state.players[i].name).join(' + ');
+  const p1 = m.p1.map(i => state.players[i]?.name || '?').join(' + ');
+  const p2 = m.p2.map(i => state.players[i]?.name || '?').join(' + ');
   if (m.winner === 0) return `<b>${esc(p1)}</b> vs ${esc(p2)}`;
   if (m.winner === 1) return `${esc(p1)} vs <b>${esc(p2)}</b>`;
   if (m.winner === 2) return `${esc(p1)} vs ${esc(p2)} <span style="color:var(--tie-fg)">(tasan)</span>`;
@@ -2105,9 +2092,12 @@ function formatScoreText(m) {
 function renderHistoryScreen() {
   const filterSelect = document.getElementById('historyFilter');
   const currentVal = filterSelect.value;
+  // Näytä suodattimessa kaikki pelaajat (myös inaktiiviset jos heillä on pelejä)
+  const stats = computeStats();
+  const visiblePlayers = state.players.filter((p, i) => p.active !== false || stats[i].games > 0 || stats[i].sitOuts > 0);
   filterSelect.innerHTML = '<option value="">Kaikki</option>' +
-    state.players.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
-  if (state.players.some(p => p.name === currentVal)) filterSelect.value = currentVal;
+    visiblePlayers.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+  if (visiblePlayers.some(p => p.name === currentVal)) filterSelect.value = currentVal;
   renderHistoryList();
 }
 
@@ -2122,14 +2112,14 @@ function renderHistoryList() {
   for (let i = all.length - 1; i >= 0; i--) {
     const round = all[i];
     const roundNum = i + 1;
-    const sitoutNames = round.sitOuts.map(idx => state.players[idx].name);
+    const sitoutNames = round.sitOuts.map(idx => state.players[idx]?.name || '?');
     const sitoutStr = sitoutNames.length > 0 ? sitoutNames.map(esc).join(', ') : '—';
 
     let matches = round.matches;
     let playerIsSitout = false;
     if (filterName) {
       matches = round.matches.filter(m => {
-        const names = [...m.p1, ...m.p2].map(idx => state.players[idx].name);
+        const names = [...m.p1, ...m.p2].map(idx => state.players[idx]?.name || '');
         return names.includes(filterName);
       });
       if (matches.length === 0 && sitoutNames.includes(filterName)) playerIsSitout = true;
@@ -2198,21 +2188,20 @@ async function copyShareLink() {
 function openAppMenu(fromLanding = false) {
   const eventSection = document.getElementById('appMenuEventSection');
   const exitSection = document.getElementById('appMenuExitSection');
-  const uiTitle = document.getElementById('appMenuUiTitle');
+  const exitDivider = document.getElementById('appMenuExitDivider');
   if (fromLanding || !eventCode) {
     eventSection.classList.add('hidden');
     exitSection.classList.add('hidden');
-    uiTitle.style.display = '';
+    exitDivider.classList.add('hidden');
   } else {
     eventSection.classList.remove('hidden');
     exitSection.classList.remove('hidden');
-    uiTitle.style.display = 'none';
+    exitDivider.classList.remove('hidden');
     const pairingBtn = document.getElementById('menuPairingEditor');
     const vd = getViewData();
     if (vd.isCurrent && vd.round) pairingBtn.classList.remove('hidden');
     else pairingBtn.classList.add('hidden');
   }
-  renderUiControls('appMenuUiControls');
   document.getElementById('appMenuModal').classList.remove('hidden');
 }
 function closeAppMenu() { document.getElementById('appMenuModal').classList.add('hidden'); }
@@ -2229,7 +2218,6 @@ async function updateApp() {
     '  • Hakee palvelimelta uusimman sovelluskoodin\n\n' +
     'Tapahtumat säilyvät palvelimella. Voit liittyä uudelleen koodilla.\n\n' +
     'Jatketaanko?';
-
   if (!confirm(warning)) return;
   showLoading('Tyhjennetään ja haetaan uusinta versiota...');
   try {
@@ -2259,10 +2247,7 @@ async function updateApp() {
     url.search = '';
     url.searchParams.set('v', Date.now().toString());
     location.replace(url.toString());
-  } catch (e) {
-    hideLoading();
-    alert('Päivitys epäonnistui: ' + (e.message || 'tuntematon'));
-  }
+  } catch (e) { hideLoading(); alert('Päivitys epäonnistui: ' + (e.message || 'tuntematon')); }
 }
 
 // ============================================================
@@ -2284,7 +2269,7 @@ document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
   }
 });
 
-document.getElementById('landingSettingsBtn').addEventListener('click', () => openAppMenu(true));
+document.getElementById('landingSettingsBtn').addEventListener('click', openUiSettings);
 
 document.getElementById('playersInput').addEventListener('input', updateSetupHelpers);
 document.getElementById('courtsInput').addEventListener('input', () => {
@@ -2299,6 +2284,17 @@ document.querySelectorAll('input[name="pairingType"]').forEach(r => {
 });
 document.querySelectorAll('input[name="scoringMode"]').forEach(r => {
   r.addEventListener('change', updateWinningScoreVisibility);
+});
+
+document.getElementById('inactiveHint').addEventListener('click', (e) => {
+  const btn = e.target.closest('.hint-add-btn');
+  if (!btn) return;
+  const ta = document.getElementById('playersInput');
+  const name = btn.dataset.name;
+  const currentNames = parsePlayerNames(ta.value);
+  if (currentNames.includes(name)) return;
+  ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + name;
+  updateSetupHelpers();
 });
 
 document.getElementById('useLastPlayersBtn').addEventListener('click', () => {
@@ -2336,11 +2332,10 @@ document.getElementById('backFromResultsBtn').addEventListener('click', () => {
   showScreen('main'); renderMain();
 });
 document.getElementById('resultsQrBtn').addEventListener('click', openShareModal);
-document.getElementById('historyBtn').addEventListener('click', () => {
-  renderHistoryScreen(); showScreen('history');
-});
+
 document.getElementById('backFromHistoryBtn').addEventListener('click', () => {
-  showScreen('results'); renderResults();
+  if (state.rounds.length > 0 || state.currentRound) { showScreen('main'); renderMain(); }
+  else { showScreen('landing'); }
 });
 document.getElementById('historyFilter').addEventListener('change', renderHistoryList);
 
@@ -2369,11 +2364,25 @@ document.getElementById('appMenuModal').addEventListener('click', (e) => {
 });
 document.getElementById('menuShare').addEventListener('click', () => { closeAppMenu(); setTimeout(openShareModal, 100); });
 document.getElementById('menuResults').addEventListener('click', () => { closeAppMenu(); renderResults(); showScreen('results'); });
+document.getElementById('menuHistory').addEventListener('click', () => { closeAppMenu(); setTimeout(() => { renderHistoryScreen(); showScreen('history'); }, 100); });
 document.getElementById('menuPairingEditor').addEventListener('click', () => { closeAppMenu(); setTimeout(openPairingEditor, 100); });
 document.getElementById('menuEditSettings').addEventListener('click', () => { closeAppMenu(); setTimeout(() => { showScreen('setup'); renderSetup(); }, 100); });
+document.getElementById('menuUiSettings').addEventListener('click', () => { closeAppMenu(); setTimeout(openUiSettings, 100); });
 document.getElementById('menuExit').addEventListener('click', () => {
   closeAppMenu();
   setTimeout(() => { if (confirm('Poistutaanko tapahtumasta? Voit liittyä takaisin koodilla ' + eventCode + '.')) exitEvent(); }, 100);
+});
+
+// Näyttöasetukset-modan kontrollit
+document.querySelectorAll('input[name="uiTheme"]').forEach(r => {
+  r.addEventListener('change', () => { if (r.checked) applyTheme(r.value); });
+});
+document.getElementById('textSizeMinus').addEventListener('click', () => applyUiScale(uiScalePercent - 5));
+document.getElementById('textSizePlus').addEventListener('click', () => applyUiScale(uiScalePercent + 5));
+document.getElementById('textSizeSlider').addEventListener('input', (e) => applyUiScale(parseInt(e.target.value, 10)));
+document.getElementById('uiSettingsCloseBtn').addEventListener('click', closeUiSettings);
+document.getElementById('uiSettingsModal').addEventListener('click', (e) => {
+  if (e.target.id === 'uiSettingsModal') closeUiSettings();
 });
 
 document.querySelectorAll('[data-version-link]').forEach(el => {
@@ -2392,10 +2401,10 @@ window.addEventListener('popstate', () => {
   } else if (!code && eventCode) exitEvent();
 });
 
-// Päivitä meta theme-color kun käyttöjärjestelmän teema vaihtuu
 if (window.matchMedia) {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeColorMeta);
 }
+window.addEventListener('resize', () => { if (state.screen === 'results') renderResults(); });
 
 // ============================================================
 // Käynnistys
@@ -2403,6 +2412,15 @@ if (window.matchMedia) {
 (function init() {
   loadAmericanoSchedules();
   updateThemeColorMeta();
+
+  // Alusta tekstikoon nykyinen arvo
+  try {
+    const stored = localStorage.getItem('mexicano_ui_scale');
+    if (stored) {
+      const num = parseFloat(stored);
+      if (num >= 75 && num <= 150) uiScalePercent = num;
+    }
+  } catch (e) {}
 
   document.querySelectorAll('[data-version-link]').forEach(el => {
     el.textContent = 'Versio ' + APP_VERSION;
