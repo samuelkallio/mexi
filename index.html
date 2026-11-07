@@ -1,155 +1,541 @@
 <!--
   ============================================================
   Mexicano / Americano / King of the Court
-  Versio: 1.8.0
-  Päivitetty: 2026-11-06
+  Versio: 1.9.0
+  Päivitetty: 2026-11-07
   ============================================================
-  Yksisivuinen tennis-/padel-sovellus kolmella paritustyypillä:
-    - Mexicano (pisteiden mukainen paritus)
-    - Americano (kiinteä kaavio americano.txt:stä)
-    - King of the Court (voittajat nousevat, häviäjät laskevat)
-  Pistelasku: pelkkä voitto tai pisteiden syöttö, tasapelit tuettu
-  Tapahtumat: Firebase Realtime Database + paikallinen lista
+  UI-uudistus: teema (vaalea/tumma), tekstiskaala (S/M/L/XL),
+  kapeampi kiinteä chrome, dynaaminen alapainike, korttilistat
+  tuloksiin ja historiaan, ⋯-valikko, auto-submit liittymiskoodi.
+  Kenttätulosrivit (5.1) säilytetty ennallaan.
   ============================================================
 -->
 <!DOCTYPE html>
 <html lang="fi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#4a5df9">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f2f4f8">
+<meta name="color-scheme" content="light dark">
 <title>Mexicano</title>
+
+<!-- Estä teeman välähdys: aseta teema ja skaala ennen ensimmäistä maalausta -->
+<script>
+(function () {
+  try {
+    var theme = localStorage.getItem('mexicano_ui_theme') || 'auto';
+    var scale = localStorage.getItem('mexicano_ui_scale') || '1';
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.style.setProperty('--text-scale', scale);
+  } catch (e) {}
+})();
+</script>
+
 <style>
+  /* ============================================================
+     Teema-tokenit (vaalea oletus)
+     ============================================================ */
+  :root {
+    color-scheme: light dark;
+    --text-scale: 1;
+
+    --bg: #f2f4f8;
+    --surface: #ffffff;
+    --surface-2: #f5f6fa;
+    --text: #1a1a2e;
+    --text-muted: #5a6172;
+    --border: #e0e3ea;
+    --border-strong: #d0d4dc;
+    --primary: #4a5df9;
+    --primary-soft: #eef0ff;
+    --primary-dark: #2a3bcc;
+    --on-primary: #ffffff;
+    --win-bg: #e5f7ea;
+    --win-fg: #146c34;
+    --tie-bg: #fff4e0;
+    --tie-fg: #8a5a00;
+    --danger: #c62828;
+    --warn-bg: #fff4e0;
+    --warn-fg: #8a5a00;
+    --warn-border: #ffd88a;
+    --past-bg: #fff8e0;
+    --past-fg: #7a5a00;
+    --past-border: #ffe4a0;
+    --rank-1-bg: #fff8e6;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.10);
+  }
+
+  /* Tumma teema: prefers-color-scheme + data-theme="dark" */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1117;
+      --surface: #171a22;
+      --surface-2: #1f232e;
+      --text: #e8eaf0;
+      --text-muted: #9aa1b1;
+      --border: #2a2f3c;
+      --border-strong: #3a4050;
+      --primary: #7d8bff;
+      --primary-soft: #1e2440;
+      --primary-dark: #a5b0ff;
+      --on-primary: #0f1117;
+      --win-bg: #16351f;
+      --win-fg: #7ee2a0;
+      --tie-bg: #3a2c10;
+      --tie-fg: #ffd27a;
+      --danger: #ff6b6b;
+      --warn-bg: #3a2c10;
+      --warn-fg: #ffd27a;
+      --warn-border: #6b5010;
+      --past-bg: #2c2410;
+      --past-fg: #ffd27a;
+      --past-border: #4a3a15;
+      --rank-1-bg: #2c2410;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,0.5);
+    }
+  }
+  [data-theme="dark"] {
+    --bg: #0f1117;
+    --surface: #171a22;
+    --surface-2: #1f232e;
+    --text: #e8eaf0;
+    --text-muted: #9aa1b1;
+    --border: #2a2f3c;
+    --border-strong: #3a4050;
+    --primary: #7d8bff;
+    --primary-soft: #1e2440;
+    --primary-dark: #a5b0ff;
+    --on-primary: #0f1117;
+    --win-bg: #16351f;
+    --win-fg: #7ee2a0;
+    --tie-bg: #3a2c10;
+    --tie-fg: #ffd27a;
+    --danger: #ff6b6b;
+    --warn-bg: #3a2c10;
+    --warn-fg: #ffd27a;
+    --warn-border: #6b5010;
+    --past-bg: #2c2410;
+    --past-fg: #ffd27a;
+    --past-border: #4a3a15;
+    --rank-1-bg: #2c2410;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.5);
+  }
+
+  /* ============================================================
+     Perusta
+     ============================================================ */
+  html { font-size: calc(16px * var(--text-scale)); -webkit-text-size-adjust: 100%; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f2f4f8; color: #1a1a2e; min-height: 100vh; font-size: 17px; }
-  .screen { padding: 12px; padding-bottom: 90px; max-width: 600px; margin: 0 auto; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 1.0625rem;
+    transition: background-color 0.2s;
+  }
+  .screen { padding: 12px; padding-bottom: 76px; max-width: 600px; margin: 0 auto; }
+  .screen.no-bottom-bar { padding-bottom: 24px; }
   .hidden { display: none !important; }
-  h1 { font-size: 1.5em; margin: 0 0 16px; }
-  h2 { font-size: 1.05em; margin: 18px 0 8px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-  .card { background: white; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  label { display: block; margin: 10px 0 6px; font-weight: 500; font-size: 0.95em; }
-  input[type=text], input[type=number], textarea, select { width: 100%; padding: 12px; font-size: 1em; border: 1px solid #d0d4dc; border-radius: 10px; background: #fff; font-family: inherit; -webkit-appearance: none; }
-  textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, monospace; }
+  h1 { font-size: 1.5rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+  h2 { font-size: 1.05rem; margin: 16px 0 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .card { background: var(--surface); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  label { display: block; margin: 8px 0 6px; font-weight: 500; font-size: 0.95rem; color: var(--text); }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 12px;
+    font-size: 16px;
+    font-size: max(1rem, 16px);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    -webkit-appearance: none;
+  }
+  textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, monospace; }
+
+  button {
+    font-family: inherit; font-size: 1rem;
+    border: none; border-radius: 12px;
+    padding: 14px 20px; cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.1s, opacity 0.1s, background-color 0.15s;
+  }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button:focus-visible, a:focus-visible, input:focus-visible,
+  select:focus-visible, textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--primary); color: var(--on-primary);
+    width: 100%; font-size: 1.05rem; padding: 14px;
+    border-radius: 12px; font-weight: 600;
+    min-height: 48px;
+  }
+  .btn-primary:disabled { background: var(--border-strong) !important; color: var(--text-muted) !important; opacity: 1 !important; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface-2); color: var(--text); min-height: 48px; }
+  .btn-small { padding: 8px 14px; font-size: 0.9rem; background: var(--surface-2); color: var(--text); }
+
   .radio-row { display: flex; gap: 8px; }
   .radio-row.three { gap: 6px; }
-  .radio-row label { flex: 1; padding: 12px; border: 2px solid #d0d4dc; border-radius: 10px; text-align: center; background: #fff; cursor: pointer; margin: 0; font-weight: 500; font-size: 0.85em; display: flex; align-items: center; justify-content: center; min-height: 48px; transition: all 0.15s; }
+  .radio-row label {
+    flex: 1; padding: 12px;
+    border: 2px solid var(--border-strong);
+    border-radius: 10px;
+    text-align: center;
+    background: var(--surface);
+    cursor: pointer; margin: 0;
+    font-weight: 500; font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 48px;
+    transition: all 0.15s;
+    color: var(--text);
+  }
   .radio-row input { display: none; }
-  .radio-row label:has(input:checked) { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; }
-  button { font-family: inherit; font-size: 1em; border: none; border-radius: 12px; padding: 14px 20px; cursor: pointer; font-weight: 600; transition: transform 0.1s, opacity 0.1s; }
-  button:active:not(:disabled) { transform: scale(0.97); }
-  
-  .btn-primary { background: #4a5df9; color: white; width: 100%; font-size: 1.1em; padding: 16px; border-radius: 12px; font-weight: 600; }
-  .btn-primary:disabled { background: #cbd0d9 !important; color: #8a92a3 !important; opacity: 1 !important; cursor: not-allowed; }
-  
-  .btn-secondary { background: #e8eaf0; color: #1a1a2e; }
-  .btn-small { padding: 8px 14px; font-size: 0.9em; background: #e8eaf0; color: #1a1a2e; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: white; border-bottom: 1px solid #e0e3ea; position: sticky; top: 0; z-index: 10; gap: 8px; }
-  .topbar-title { font-weight: 600; }
-  .topbar-round { font-size: 0.85em; color: #888; margin-top: 2px; }
-  .topbar-actions { display: flex; gap: 6px; }
-  .icon-btn { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.15em; cursor: pointer; min-width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+  .radio-row label:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
 
-  .round-nav { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: white; border-bottom: 1px solid #e0e3ea; }
-  .round-nav-arrow { background: #f0f2f7; border: none; border-radius: 10px; padding: 0; font-size: 1.1em; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #1a1a2e; }
-  .round-nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
-  .round-nav-label { flex: 1; text-align: center; font-size: 0.95em; font-weight: 500; color: #555; }
-  .round-nav-label .past-tag { display: inline-block; background: #ffeaa0; color: #7a5a00; font-size: 0.7em; padding: 2px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  /* ============================================================
+     Topbar – yhtenäinen 48px korkea
+     ============================================================ */
+  .topbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+    min-height: 48px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .topbar-title { font-weight: 600; font-size: 1rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+  .topbar-actions { display: flex; gap: 2px; align-items: center; }
 
-  .sitout-banner { background: #fff4e0; border: 1px solid #ffd88a; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85em; }
-  .sitout-banner b { color: #a86a00; }
-  .past-banner { background: #fff8e0; border: 1px solid #ffe4a0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85em; color: #7a5a00; }
+  .icon-btn {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 0;
+    font-size: 1.1rem;
+    cursor: pointer;
+    width: 44px; height: 44px;
+    min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .icon-btn:hover, .icon-btn:active { background: var(--surface-2); }
+  .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-  .court-list { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 12px; }
-  .court-row { display: flex; align-items: stretch; border-bottom: 1px solid #eee; min-height: 64px; }
+  /* Main-näkymän topbar: ◀ K 2/5 · 8p ▶ 📊 ⋯ */
+  .topbar-main-info {
+    flex: 1; text-align: center;
+    font-size: 0.9rem; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 0 4px; min-width: 0;
+  }
+  .topbar-main-info .dot { color: var(--text-muted); margin: 0 4px; }
+  .topbar-main-info .past-tag {
+    display: inline-block;
+    background: var(--past-bg); color: var(--past-fg);
+    font-size: 0.7rem; padding: 1px 5px; border-radius: 4px;
+    margin-left: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  .icon-btn-small {
+    background: transparent; border: none;
+    border-radius: 10px; padding: 0;
+    font-size: 1.1rem; cursor: pointer;
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+  }
+  .icon-btn-small:hover, .icon-btn-small:active { background: var(--surface-2); color: var(--text); }
+
+  /* ============================================================
+     Bannerit (ei kiinteitä, osa scrollia)
+     ============================================================ */
+  .sitout-banner {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 6px 10px; margin-bottom: 8px;
+    font-size: 0.85rem; color: var(--warn-fg);
+  }
+  .sitout-banner b { color: var(--warn-fg); font-weight: 700; }
+  .past-banner {
+    background: var(--past-bg);
+    border: 1px solid var(--past-border);
+    border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 8px;
+    font-size: 0.85rem; color: var(--past-fg);
+  }
+
+  /* ============================================================
+     Kenttärivit – SÄILYTETTY ENNALLAAN
+     ============================================================ */
+  .court-list { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .court-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); min-height: 64px; }
   .court-row:last-child { border-bottom: none; }
-  .court-name { width: 42px; display: flex; align-items: center; justify-content: center; background: #f5f6fa; font-weight: 600; color: #666; font-size: 0.85em; border-right: 1px solid #eee; flex-shrink: 0; }
-  
-  .compact-pair { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 6px 4px; border: none; background: transparent; font-family: inherit; font-size: 0.95em; font-weight: 500; color: #1a1a2e; transition: background 0.15s; line-height: 1.3; cursor: pointer; margin: 0; border-radius: 0; text-align: center; }
-  .compact-pair.winner { background: #e5f7ea; color: #146c34; font-weight: 700; }
+  .court-name { width: 42px; display: flex; align-items: center; justify-content: center; background: var(--surface-2); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; border-right: 1px solid var(--border); flex-shrink: 0; }
+
+  .compact-pair {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 6px 4px;
+    border: none; background: transparent;
+    font-family: inherit; font-size: 0.95rem; font-weight: 500;
+    color: var(--text);
+    transition: background 0.15s; line-height: 1.3;
+    cursor: pointer; margin: 0; border-radius: 0; text-align: center;
+  }
+  .compact-pair.winner { background: var(--win-bg); color: var(--win-fg); font-weight: 700; }
   .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  
-  /* AUDIT-FIX: score-cell on nyt klikattava button, joka tukee myös tasapeliä */
-  .compact-score { 
-    display: flex; align-items: center; justify-content: center; 
-    width: 70px; flex-shrink: 0; 
-    padding: 0; font-weight: 700; color: #777; font-size: 1em; 
-    border-top: none; border-bottom: none; border-left: 1px solid #eee; border-right: 1px solid #eee;
-    border-radius: 0; background: #fafafa; 
+
+  .compact-score {
+    display: flex; align-items: center; justify-content: center;
+    width: 70px; flex-shrink: 0;
+    padding: 0; font-weight: 700; color: var(--text-muted); font-size: 1rem;
+    border-top: none; border-bottom: none;
+    border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    border-radius: 0; background: var(--surface-2);
     font-family: inherit; cursor: pointer;
   }
-  .compact-score.winner { color: #146c34; background: #e5f7ea; }
-  .compact-score.tie { color: #a86a00; background: #fff4e0; }
+  .compact-score.winner { color: var(--win-fg); background: var(--win-bg); }
+  .compact-score.tie { color: var(--tie-fg); background: var(--tie-bg); }
 
-  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e3ea; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); z-index: 20; }
-  .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; }
-  
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
-  .modal { background: white; border-radius: 20px 20px 0 0; padding: 24px 20px; padding-bottom: max(24px, env(safe-area-inset-bottom)); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
-  .modal h3 { margin: 0 0 16px; }
+  /* ============================================================
+     Bottom bar – 56px kiinteä
+     ============================================================ */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+  }
+  .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; min-height: 44px; padding: 10px 16px; font-size: 1rem; }
+
+  /* ============================================================
+     Modaalit (bottom sheet)
+     ============================================================ */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 12px 20px 20px;
+    padding-bottom: max(20px, calc(20px + env(safe-area-inset-bottom, 0px)));
+    width: 100%; max-width: 600px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal h3 { margin: 4px 0 12px; font-size: 1.1rem; color: var(--text); }
+  .modal-drag-handle { width: 36px; height: 4px; background: var(--border-strong); border-radius: 2px; margin: 4px auto 12px; }
+
   .score-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
   .score-row .label-side { flex: 1; font-weight: 500; }
-  .score-row input { width: 80px; text-align: center; font-size: 1.3em; font-weight: 600; }
-  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
-  .modal-actions button { flex: 1; padding: 16px; }
+  .score-row input { width: 80px; text-align: center; font-size: 1.3rem; font-weight: 600; }
+
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions button { flex: 1; padding: 12px; min-height: 48px; }
   .modal-actions .btn-primary { width: auto; }
 
-  .results-table { width: 100%; border-collapse: collapse; font-size: 0.9em; background: white; border-radius: 12px; overflow: hidden; }
-  .results-table th, .results-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
-  .results-table th { background: #f5f6fa; font-size: 0.72em; text-transform: uppercase; color: #666; letter-spacing: 0.5px; }
-  .results-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .results-table th.num { text-align: right; }
-  .results-table tr.rank-1 td { font-weight: 700; background: #fff8e6; }
-  .name-cell { word-break: break-word; }
+  /* ⋯-valikko */
+  .menu-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+  .menu-item {
+    width: 100%; text-align: left;
+    padding: 12px;
+    border-radius: 8px;
+    background: transparent; color: var(--text);
+    font-size: 1rem; font-weight: 500;
+    cursor: pointer; border: none; font-family: inherit;
+    display: flex; align-items: center; gap: 10px;
+    min-height: 48px;
+  }
+  .menu-item:hover, .menu-item:active { background: var(--surface-2); }
+  .menu-item-danger { color: var(--danger); }
+  .menu-divider { height: 1px; background: var(--border); margin: 8px 0; }
 
-  .results-qr-btn { background: white; border: 1px solid #e0e3ea; border-radius: 8px; padding: 2px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-  .results-qr { width: 40px; height: 40px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .ui-section { margin-bottom: 16px; }
+  .ui-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: block; }
+  .size-row label:nth-child(1) { font-size: 0.8rem; }
+  .size-row label:nth-child(2) { font-size: 0.95rem; }
+  .size-row label:nth-child(3) { font-size: 1.1rem; }
+  .size-row label:nth-child(4) { font-size: 1.25rem; }
+
+  /* ============================================================
+     Tulokset – korttilista
+     ============================================================ */
+  .result-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+    min-height: 64px;
+  }
+  .result-card.rank-1 { background: var(--rank-1-bg); }
+  .result-rank {
+    font-size: 1.3rem; font-weight: 700;
+    color: var(--text-muted);
+    min-width: 28px; text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .result-card.rank-1 .result-rank { color: var(--tie-fg); }
+  .result-main { flex: 1; min-width: 0; }
+  .result-name { font-weight: 600; font-size: 1rem; word-break: break-word; }
+  .result-stats { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+  .result-saldo {
+    font-size: 1.4rem; font-weight: 700;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .results-legend { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 12px 0; }
+
+  /* ============================================================
+     Historia – pystylista
+     ============================================================ */
+  .history-round {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+  }
+  .history-round-header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.75rem; color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    gap: 8px;
+  }
+  .history-round-sitouts { text-align: right; word-break: break-word; }
+  .history-match {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .history-match:first-of-type { border-top: none; padding-top: 2px; }
+  .history-court { min-width: 26px; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; flex-shrink: 0; }
+  .history-pairs { flex: 1; word-break: break-word; line-height: 1.4; }
+  .history-score { font-weight: 700; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  .history-empty { text-align: center; padding: 24px; color: var(--text-muted); }
+  .history-sitout-badge { display: inline-block; background: var(--warn-bg); color: var(--warn-fg); padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+
+  /* ============================================================
+     Muut apurit
+     ============================================================ */
+  .error { color: var(--danger); font-size: 0.9rem; margin-top: 8px; min-height: 1em; }
+  .helper { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+  .stat-points { color: var(--text-muted); font-size: 0.85em; font-weight: 400; }
+
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(242,244,248,0.95);
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+  [data-theme="dark"] .loading-overlay { background: rgba(15,17,23,0.95); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .loading-overlay { background: rgba(15,17,23,0.95); }
+  }
+  .loading-box { background: var(--surface); padding: 24px 32px; border-radius: 16px; text-align: center; box-shadow: var(--shadow-lg); }
+  .spinner { width: 40px; height: 40px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #qrContainer { text-align: center; margin: 16px 0; }
+  #qrContainer img { max-width: 240px; height: auto; display: inline-block; background: white; padding: 8px; border-radius: 8px; }
+  .code-display { font-size: 2.2rem; font-weight: 700; letter-spacing: 0.2em; font-family: ui-monospace, monospace; color: var(--primary-dark); }
+  .share-url { padding: 12px; background: var(--surface-2); border-radius: 10px; font-family: ui-monospace, monospace; font-size: 0.75rem; word-break: break-all; color: var(--text-muted); }
+
+  .results-qr-btn { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 2px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
+  .results-qr { width: 36px; height: 36px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .results-qr img { width: 100%; height: 100%; display: block; }
 
-  .history-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
-  .history-table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: 0.82em; background: white; }
-  .history-table th, .history-table td { padding: 9px 6px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; word-break: break-word; }
-  .history-table th { background: #f5f6fa; font-size: 0.72em; text-transform: uppercase; color: #666; letter-spacing: 0.5px; position: sticky; top: 0; }
-  .history-table td.num { text-align: center; white-space: nowrap; }
-  .history-table th.num { text-align: center; }
-  .history-table tr.sitout-row td { background: #fff8e0; }
-  .history-table td.sitout-cell { color: #a86a00; font-weight: 600; }
-  .stat-points { color: #888; font-size: 0.9em; font-weight: 400; }
-  .history-empty { text-align: center; padding: 24px; color: #888; }
-
-  .error { color: #d33; font-size: 0.9em; margin-top: 8px; min-height: 1em; }
-  .helper { font-size: 0.85em; color: #888; margin-top: 4px; }
-  .loading-overlay { position: fixed; inset: 0; background: rgba(242,244,248,0.95); z-index: 200; display: flex; align-items: center; justify-content: center; }
-  .loading-box { background: white; padding: 24px 32px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-  .spinner { width: 40px; height: 40px; border: 4px solid #e0e3ea; border-top-color: #4a5df9; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  #qrContainer img { max-width: 240px; height: auto; display: inline-block; }
-  .code-display { font-size: 2.2em; font-weight: 700; letter-spacing: 0.2em; font-family: ui-monospace, monospace; color: #2a3bcc; }
-
-  .event-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eee; }
+  /* Omat tapahtumat */
+  .event-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    border-radius: 8px;
+    min-height: 56px;
+    transition: background 0.1s;
+  }
+  .event-item:hover, .event-item:active { background: var(--surface-2); }
   .event-item:last-child { border-bottom: none; }
   .event-info { flex: 1; min-width: 0; }
-  .event-code { font-family: ui-monospace, monospace; font-size: 1.2em; font-weight: 700; letter-spacing: 0.1em; color: #2a3bcc; }
-  .event-meta { font-size: 0.82em; color: #888; margin-top: 2px; }
-  .event-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .btn-join { background: #4a5df9; color: white; }
-  .btn-delete { background: #fee; color: #c33; padding: 8px 12px; }
+  .event-code { font-family: ui-monospace, monospace; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.1em; color: var(--primary-dark); }
+  .event-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+  .event-chevron { color: var(--text-muted); font-size: 1.2rem; flex-shrink: 0; }
+  .btn-icon-delete { background: transparent; border: none; padding: 8px; border-radius: 8px; color: var(--danger); font-size: 1rem; cursor: pointer; min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .btn-icon-delete:hover { background: var(--surface-2); }
 
+  /* Parinvaihto-editori */
   .pe-court { margin-bottom: 14px; }
   .pe-court:last-child { margin-bottom: 0; }
-  .pe-court-label { font-size: 0.75em; text-transform: uppercase; color: #666; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .pe-court-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 6px; letter-spacing: 0.5px; }
   .pe-pair-row { display: flex; gap: 6px; margin-bottom: 6px; }
   .pe-pair-row:last-child { margin-bottom: 0; }
-  .pe-player { flex: 1; padding: 12px 8px; background: #f5f6fa; border: 2px solid #e0e3ea; border-radius: 8px; text-align: center; font-family: inherit; font-size: 0.9em; font-weight: 500; cursor: pointer; min-height: 48px; word-break: break-word; color: #1a1a2e; transition: border-color 0.15s, background 0.15s; }
+  .pe-player {
+    flex: 1; padding: 12px 8px;
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    text-align: center; font-family: inherit; font-size: 0.9rem;
+    font-weight: 500; cursor: pointer;
+    min-height: 48px;
+    word-break: break-word;
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
   .pe-player:active { transform: scale(0.97); }
-  .pe-player.pe-selected { border-color: #4a5df9; background: #eef0ff; color: #2a3bcc; font-weight: 700; }
-  .pe-sitout-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; }
+  .pe-player.pe-selected { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; }
+  .pe-sitout-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
   .pe-sitout-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .pe-sitout-list .pe-player { flex: 0 1 auto; min-width: 90px; }
 
+  /* Setup details/accordion */
+  details.info-details { margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); }
+  details.info-details summary { cursor: pointer; user-select: none; padding: 6px 0; color: var(--primary); font-weight: 500; }
+  details.info-details summary:hover { text-decoration: underline; }
+  details.info-details > div { padding: 4px 0 4px 8px; line-height: 1.5; }
+
+  .use-last-btn { margin-top: 6px; padding: 8px 12px; font-size: 0.85rem; background: transparent; color: var(--primary); border: 1px solid var(--primary); border-radius: 8px; font-weight: 500; cursor: pointer; min-height: 36px; }
+  .use-last-btn:hover { background: var(--primary-soft); }
+
   /* Versiotieto */
-  .version-footer { text-align: center; margin-top: 28px; padding-top: 16px; border-top: 1px solid #e0e3ea; }
-  .version-link { display: inline-block; color: #4a5df9; font-size: 0.85em; text-decoration: underline; cursor: pointer; padding: 4px 8px; }
+  .version-footer { text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .version-link { display: inline-block; color: var(--primary); font-size: 0.85rem; text-decoration: underline; cursor: pointer; padding: 8px 12px; }
   .version-link:active { opacity: 0.7; }
+
+  /* Liikkumisen esto */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    button:active:not(:disabled) { transform: none !important; }
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 </head>
@@ -164,11 +550,18 @@
 
 <!-- LANDING -->
 <div id="landingScreen" class="screen hidden">
-  <h1>🎾 Mexicano</h1>
+  <h1>🎾 Mexicano <button class="icon-btn-small" id="landingSettingsBtn" aria-label="Käyttöliittymäasetukset" style="margin-left:auto">⚙️</button></h1>
+
   <div class="card">
     <h2 style="margin-top:0">Luo uusi tapahtuma</h2>
-    <p style="color:#666;font-size:0.9em;margin-top:0">Luo tapahtuma ja jaa 5-kirjaiminen koodi tai QR-koodi muille pelaajille.</p>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-top:0">Luo tapahtuma ja jaa koodi tai QR-koodi muille.</p>
     <button class="btn-primary" id="createEventBtn">Luo tapahtuma</button>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Liity tapahtumaan</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-top:0">Syötä 5-kirjaiminen koodi.</p>
+    <input type="text" id="joinCodeInput" placeholder="ESIM. 7KQ2M" maxlength="5" style="text-transform:uppercase;text-align:center;font-size:1.3rem;letter-spacing:2px" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="characters">
   </div>
 
   <div class="card hidden" id="myEventsCard">
@@ -176,35 +569,25 @@
     <div id="myEventsList"></div>
   </div>
 
-  <div class="card">
-    <h2 style="margin-top:0">Liity tapahtumaan</h2>
-    <p style="color:#666;font-size:0.9em;margin-top:0">Syötä tapahtuman 5-kirjaiminen koodi.</p>
-    <input type="text" id="joinCodeInput" placeholder="ESIM. 7KQ2M" maxlength="5" style="text-transform:uppercase;text-align:center;font-size:1.3em;letter-spacing:2px" autocomplete="off" autocorrect="off" spellcheck="false">
-    <button class="btn-primary" id="joinEventBtn" style="margin-top:8px">Liity</button>
-  </div>
   <div id="landingError" class="error"></div>
   <div class="version-footer">
-    <a class="version-link" data-version-link>Versio 1.8.0</a>
+    <a class="version-link" data-version-link>Versio 1.9.0</a>
   </div>
 </div>
 
 <!-- SETUP -->
 <div id="setupScreen" class="hidden">
   <div class="topbar">
-    <div>
-      <div class="topbar-title">Asetukset</div>
-      <div class="topbar-round" id="setupEventInfo"></div>
-    </div>
-    <div class="topbar-actions">
-      <button class="icon-btn" id="setupShareBtn" title="Jaa">📤</button>
-      <button class="icon-btn" id="setupExitBtn" title="Poistu">✕</button>
-    </div>
+    <button class="icon-btn" id="setupExitBtn" title="Poistu" aria-label="Poistu tapahtumasta">✕</button>
+    <div class="topbar-title">Asetukset</div>
+    <button class="icon-btn" id="setupShareBtn" title="Jaa" aria-label="Jaa tapahtuma">📤</button>
   </div>
   <div class="screen">
     <div class="card">
       <label for="playersInput">Pelaajat (yksi per rivi)</label>
       <textarea id="playersInput" placeholder="A&#10;B&#10;C&#10;D&#10;E&#10;F&#10;G&#10;H&#10;I&#10;J"></textarea>
       <div class="helper" id="playerCountHelper">0 pelaajaa</div>
+      <button class="use-last-btn hidden" id="useLastPlayersBtn" type="button">Käytä viimeisintä listaa</button>
     </div>
     <div class="card">
       <h2 style="margin-top:0">Paritustyyppi</h2>
@@ -213,10 +596,19 @@
         <label><input type="radio" name="pairingType" value="americano"><span>Americano</span></label>
         <label><input type="radio" name="pairingType" value="koc"><span>King of the Court</span></label>
       </div>
-      <div class="helper" style="margin-top:8px">
-        <div id="mexicanoInfo">Mexicano: pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan taulukon mukaisesti.</div>
-        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan (americano.txt). Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen. Huom: toistot ovat mahdollisia, erityisesti pienillä pelaajamäärillä (esim. 4 pelaajalla uniikkeja pareja on vain 6).</div>
-        <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat. <b>Vaatii vähintään 2 kenttää ja 8 pelaajaa.</b> Tauolla olevan pelaajan taso ei muutu tauon aikana.</div>
+      <div id="pairingInfo">
+        <details class="info-details" id="mexicanoDetails">
+          <summary>ⓘ Miten Mexicano parittaa?</summary>
+          <div>Pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan valitun kaavan mukaisesti. Paritus muuttuu kierrosten myötä pelimenestyksen perusteella.</div>
+        </details>
+        <details class="info-details hidden" id="americanoDetails">
+          <summary>ⓘ Miten Americano toimii?</summary>
+          <div>Käytetään kiinteää pelikaaviota pelaajamäärän mukaan. Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen. Huom: toistot ovat mahdollisia, erityisesti pienillä pelaajamäärillä.</div>
+        </details>
+        <details class="info-details hidden" id="kocDetails">
+          <summary>ⓘ Miten King of the Court toimii?</summary>
+          <div>Voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat. <b>Vaatii vähintään 2 kenttää ja 8 pelaajaa.</b> Tauolla olevan pelaajan taso ei muutu tauon aikana. Tasapeli ei liikuta tasoja.</div>
+        </details>
       </div>
     </div>
     <div class="card" id="mexicanoPairingCard">
@@ -227,15 +619,15 @@
       </div>
     </div>
     <div class="card">
-      <h2 style="margin-top:0">Kirjaustapa</h2>
+      <h2 style="margin-top:0">Kirjaus</h2>
       <div class="radio-row">
-        <label><input type="radio" name="scoringMode" value="win"><span>Pelkkä voitto</span></label>
-        <label><input type="radio" name="scoringMode" value="score"><span>Pisteiden syöttö</span></label>
+        <label><input type="radio" name="scoringMode" value="win"><span>Voitto</span></label>
+        <label><input type="radio" name="scoringMode" value="score"><span>Pisteet</span></label>
       </div>
       <div id="winningScoreRow" style="margin-top:12px">
         <label for="winningScoreInput">Voittopistemäärä</label>
         <input type="number" id="winningScoreInput" min="0" value="11">
-        <div class="helper">Kuinka monta pistettä voittaja saa tilastoon (0 = käytä todellisia pisteitä)</div>
+        <div class="helper">Voittajan pisteet tilastoon (0 = todelliset pisteet)</div>
       </div>
     </div>
     <div class="card">
@@ -244,10 +636,10 @@
       <div class="helper" id="courtsHelper"></div>
     </div>
     <div id="setupError" class="error"></div>
-    <button class="btn-primary" id="startBtn" style="margin-top:12px">Aloita</button>
+    <button class="btn-primary" id="startBtn" style="margin-top:8px">Aloita</button>
     <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
     <div class="version-footer">
-      <a class="version-link" data-version-link>Versio 1.8.0</a>
+      <a class="version-link" data-version-link>Versio 1.9.0</a>
     </div>
   </div>
 </div>
@@ -255,25 +647,15 @@
 <!-- MAIN -->
 <div id="mainScreen" class="hidden">
   <div class="topbar">
-    <div>
-      <div class="topbar-title" id="mainTitle">Mexicano</div>
-      <div class="topbar-round" id="roundInfo"></div>
-    </div>
-    <div class="topbar-actions">
-      <button class="icon-btn hidden" id="editPairingBtn" title="Vaihda pelaajien paikkoja">🔄</button>
-      <button class="icon-btn" id="shareBtn" title="Jaa">📤</button>
-      <button class="icon-btn" id="resultsBtn" title="Tulokset">📊</button>
-      <button class="icon-btn" id="settingsBtn" title="Asetukset">⚙️</button>
-    </div>
-  </div>
-  <div class="round-nav">
-    <button class="round-nav-arrow" id="prevRoundBtn" aria-label="Edellinen kierros">◀</button>
-    <div class="round-nav-label" id="roundNavLabel"></div>
-    <button class="round-nav-arrow" id="nextRoundArrowBtn" aria-label="Seuraava kierros">▶</button>
+    <button class="icon-btn" id="prevRoundBtn" aria-label="Edellinen kierros">◀</button>
+    <div class="topbar-main-info" id="topbarMainInfo"></div>
+    <button class="icon-btn" id="nextRoundArrowBtn" aria-label="Seuraava kierros">▶</button>
+    <button class="icon-btn" id="resultsBtn" title="Tulokset" aria-label="Tulokset">📊</button>
+    <button class="icon-btn" id="menuBtn" title="Lisää" aria-label="Lisää toimintoja">⋯</button>
   </div>
   <div class="screen">
-    <div id="pastRoundBanner" class="past-banner hidden">Katselet mennyttä kierrosta. Tulokset ovat muokattavissa.</div>
-    <div class="sitout-banner" id="sitoutBanner"></div>
+    <div id="pastRoundBanner" class="past-banner hidden">Katselet mennyttä kierrosta. Tulokset muokattavissa.</div>
+    <div id="sitoutBanner" class="sitout-banner hidden"></div>
     <div id="courtsContainer"></div>
   </div>
   <div class="bottom-bar">
@@ -284,46 +666,39 @@
 <!-- RESULTS -->
 <div id="resultsScreen" class="hidden">
   <div class="topbar">
-    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-      <button class="results-qr-btn" id="resultsQrBtn" title="Näytä QR-koodi">
-        <div id="resultsQr" class="results-qr"></div>
-      </button>
-      <div class="topbar-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Tulokset</div>
-    </div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      <button class="btn-small" id="historyBtn">Kierrokset</button>
-      <button class="btn-small" id="backFromResultsBtn">Takaisin</button>
-    </div>
+    <button class="icon-btn" id="backFromResultsBtn" aria-label="Takaisin">‹</button>
+    <div class="topbar-title">Tulokset</div>
+    <button class="icon-btn" id="resultsQrBtn" aria-label="Näytä QR-koodi" style="background:white;padding:2px">
+      <div id="resultsQr" class="results-qr"></div>
+    </button>
+    <button class="icon-btn" id="historyBtn" title="Kierrokset" aria-label="Kierrokset">📋</button>
   </div>
-  <div class="screen">
-    <table class="results-table" id="resultsTable"></table>
+  <div class="screen no-bottom-bar">
+    <div id="resultsList"></div>
+    <div class="results-legend">Saldo = pisteet / pelit × 10</div>
   </div>
 </div>
 
 <!-- HISTORY -->
 <div id="historyScreen" class="hidden">
   <div class="topbar">
-    <div class="topbar-title">Kaikki kierrokset</div>
-    <button class="btn-small" id="backFromHistoryBtn">Takaisin</button>
+    <button class="icon-btn" id="backFromHistoryBtn" aria-label="Takaisin tuloksiin">‹</button>
+    <div class="topbar-title">Kierrokset</div>
+    <select id="historyFilter" style="width:auto;max-width:150px;padding:6px 8px;font-size:0.85rem;min-height:40px">
+      <option value="">Kaikki</option>
+    </select>
   </div>
-  <div class="screen">
-    <div class="card" style="padding:12px 16px;margin-bottom:12px">
-      <label for="historyFilter" style="margin:0 0 6px;font-size:0.9em">Suodata pelaajan mukaan</label>
-      <select id="historyFilter">
-        <option value="">Kaikki pelaajat</option>
-      </select>
-    </div>
-    <div class="history-scroll">
-      <table class="history-table" id="historyTable"></table>
-    </div>
+  <div class="screen no-bottom-bar">
+    <div id="historyList"></div>
   </div>
 </div>
 
 <!-- SCORE MODAL -->
 <div id="scoreModal" class="modal-overlay hidden">
   <div class="modal">
+    <div class="modal-drag-handle"></div>
     <h3 id="scoreModalTitle">Syötä pisteet</h3>
-    <div id="scoreModalTarget" class="helper hidden" style="margin-top:-8px;margin-bottom:12px"></div>
+    <div id="scoreModalTarget" class="helper hidden" style="margin-top:-4px;margin-bottom:8px"></div>
     <div class="score-row">
       <div class="label-side" id="scorePair1Label"></div>
       <input type="number" id="score1Input" min="0" inputmode="numeric" placeholder="0">
@@ -332,10 +707,9 @@
       <div class="label-side" id="scorePair2Label"></div>
       <input type="number" id="score2Input" min="0" inputmode="numeric" placeholder="0">
     </div>
-    <div class="helper" style="margin-top:-4px;margin-bottom:8px;font-size:0.85em">Syötä molemmille sama pistemäärä merkitäksesi tasapelin.</div>
+    <div class="helper" style="margin-top:-4px">Sama pistemäärä = tasapeli. Molemmat saavat voiton.</div>
     <div id="scoreError" class="error"></div>
     <div class="modal-actions">
-      <button class="btn-secondary" id="scoreClearBtn">Tyhjennä</button>
       <button class="btn-secondary" id="scoreCancelBtn">Peruuta</button>
       <button class="btn-primary" id="scoreSaveBtn">Tallenna</button>
     </div>
@@ -345,8 +719,9 @@
 <!-- PAIRING EDITOR MODAL -->
 <div id="pairingEditorModal" class="modal-overlay hidden">
   <div class="modal">
+    <div class="modal-drag-handle"></div>
     <h3>Vaihda pelaajien paikkoja</h3>
-    <p style="color:#888;font-size:0.88em;margin:0 0 16px">Napauta kahta pelaajaa vaihtaaksesi heidän paikkansa. Voit siirtää pelaajan myös tauolle tai tauolta kentälle.</p>
+    <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 12px">Napauta kahta pelaajaa vaihtaaksesi heidän paikkansa. Voit siirtää pelaajan myös tauolle tai tauolta kentälle.</p>
     <div id="pairingEditorContent"></div>
     <div class="modal-actions">
       <button class="btn-secondary" id="pairingEditorCancelBtn">Peruuta</button>
@@ -358,16 +733,43 @@
 <!-- SHARE MODAL -->
 <div id="shareModal" class="modal-overlay hidden">
   <div class="modal">
+    <div class="modal-drag-handle"></div>
     <h3>Jaa tapahtuma</h3>
-    <div style="text-align:center;margin:16px 0">
+    <div style="text-align:center;margin:12px 0">
       <div class="code-display" id="shareCode"></div>
-      <div style="color:#888;font-size:0.85em;margin-top:4px">Tapahtumakoodi</div>
+      <div style="color:var(--text-muted);font-size:0.85rem;margin-top:2px">Tapahtumakoodi</div>
     </div>
-    <div id="qrContainer" style="text-align:center;margin:16px 0"></div>
-    <div style="padding:12px;background:#f5f6fa;border-radius:10px;font-family:ui-monospace,monospace;font-size:0.8em;word-break:break-all;color:#555" id="shareUrl"></div>
+    <div id="qrContainer"></div>
+    <div class="share-url" id="shareUrl"></div>
     <div class="modal-actions">
       <button class="btn-secondary" id="shareCloseBtn">Sulje</button>
       <button class="btn-primary" id="shareCopyBtn">Kopioi linkki</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP MENU MODAL (⋯) -->
+<div id="appMenuModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-drag-handle"></div>
+    <div id="appMenuEventSection">
+      <h3>Tapahtuma</h3>
+      <div class="menu-list">
+        <button class="menu-item" id="menuShare">📤 Jaa tapahtuma</button>
+        <button class="menu-item" id="menuResults">📊 Tulokset</button>
+        <button class="menu-item" id="menuPairingEditor">🔄 Vaihda parit</button>
+        <button class="menu-item" id="menuEditSettings">⚙️ Muokkaa tapahtumaa</button>
+      </div>
+      <div class="menu-divider"></div>
+    </div>
+    <h3 id="appMenuUiTitle">Käyttöliittymä</h3>
+    <div id="appMenuUiControls"></div>
+    <div class="menu-divider"></div>
+    <div id="appMenuExitSection">
+      <button class="menu-item menu-item-danger" id="menuExit">✕ Poistu tapahtumasta</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="appMenuCloseBtn">Sulje</button>
     </div>
   </div>
 </div>
@@ -389,51 +791,98 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// ============================================================
-// Sovelluksen versio
-// ============================================================
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 // ============================================================
-// Americano-taulukot (ladataan ulkoisesta tiedostosta)
+// Käyttöliittymäasetukset (teema + tekstikoko)
+// ============================================================
+function updateThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+    (document.documentElement.getAttribute('data-theme') !== 'light' &&
+     window.matchMedia('(prefers-color-scheme: dark)').matches);
+  meta.setAttribute('content', isDark ? '#0f1117' : '#f2f4f8');
+}
+
+function applyTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem('mexicano_ui_theme', theme); } catch (e) {}
+  updateThemeColorMeta();
+}
+
+function applyScale(scale) {
+  document.documentElement.style.setProperty('--text-scale', scale);
+  try { localStorage.setItem('mexicano_ui_scale', scale); } catch (e) {}
+}
+
+function getThemeSetting() {
+  try { return localStorage.getItem('mexicano_ui_theme') || 'auto'; } catch (e) { return 'auto'; }
+}
+function getScaleSetting() {
+  try { return localStorage.getItem('mexicano_ui_scale') || '1'; } catch (e) { return '1'; }
+}
+
+function renderUiControls(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const theme = getThemeSetting();
+  const scale = getScaleSetting();
+  container.innerHTML = `
+    <div class="ui-section">
+      <span class="ui-label">Teema</span>
+      <div class="radio-row">
+        <label><input type="radio" name="uiTheme" value="auto" ${theme==='auto'?'checked':''}><span>Auto</span></label>
+        <label><input type="radio" name="uiTheme" value="light" ${theme==='light'?'checked':''}><span>Vaalea</span></label>
+        <label><input type="radio" name="uiTheme" value="dark" ${theme==='dark'?'checked':''}><span>Tumma</span></label>
+      </div>
+    </div>
+    <div class="ui-section">
+      <span class="ui-label">Tekstikoko</span>
+      <div class="radio-row size-row">
+        <label><input type="radio" name="uiScale" value="0.875" ${scale==='0.875'?'checked':''}><span>S</span></label>
+        <label><input type="radio" name="uiScale" value="1" ${scale==='1'?'checked':''}><span>M</span></label>
+        <label><input type="radio" name="uiScale" value="1.125" ${scale==='1.125'?'checked':''}><span>L</span></label>
+        <label><input type="radio" name="uiScale" value="1.25" ${scale==='1.25'?'checked':''}><span>XL</span></label>
+      </div>
+    </div>
+  `;
+  container.querySelectorAll('input[name="uiTheme"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) applyTheme(r.value); });
+  });
+  container.querySelectorAll('input[name="uiScale"]').forEach(r => {
+    r.addEventListener('change', () => { if (r.checked) applyScale(r.value); });
+  });
+}
+
+// ============================================================
+// Americano
 // ============================================================
 let AMERICANO_SCHEDULES = {};
 let americanoLoadPromise = null;
-// AUDIT-FIX: seurataan latauksen epäonnistumista, jotta voidaan yrittää uudelleen
 let americanoLoadError = false;
 
-function letterToIndex(letter) {
-  return letter.toUpperCase().charCodeAt(0) - 65;
-}
+function letterToIndex(letter) { return letter.toUpperCase().charCodeAt(0) - 65; }
 
 function parseAmericanoTxt(text) {
   const schedules = {};
   const lines = text.split(/\r?\n/);
   let currentPlayers = null;
   let currentRounds = [];
-
   const flush = () => {
-    if (currentPlayers !== null && currentRounds.length > 0) {
-      schedules[currentPlayers] = currentRounds;
-    }
+    if (currentPlayers !== null && currentRounds.length > 0) schedules[currentPlayers] = currentRounds;
     currentRounds = [];
   };
-
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-
     const playersMatch = trimmed.match(/Pelaajia:\s*(\d+)/);
-    if (playersMatch) {
-      flush();
-      currentPlayers = parseInt(playersMatch[1], 10);
-      continue;
-    }
-
+    if (playersMatch) { flush(); currentPlayers = parseInt(playersMatch[1], 10); continue; }
     const roundMatch = trimmed.match(/^(\d+):\s*(.+)$/);
     if (roundMatch && currentPlayers !== null) {
-      const matchesStr = roundMatch[2];
-      const matchParts = matchesStr.split(',').map(s => s.trim());
+      const matchParts = roundMatch[2].split(',').map(s => s.trim());
       const round = matchParts.map(m => {
         const parts = m.split(':');
         if (parts.length !== 2) return null;
@@ -445,7 +894,6 @@ function parseAmericanoTxt(text) {
         if ([...p1, ...p2].some(n => isNaN(n) || n < 0)) return null;
         return [p1[0], p1[1], p2[0], p2[1]];
       }).filter(Boolean);
-
       if (round.length > 0) currentRounds.push(round);
     }
   }
@@ -453,10 +901,8 @@ function parseAmericanoTxt(text) {
   return schedules;
 }
 
-// AUDIT-FIX: uudelleenyritys epäonnistumisen jälkeen, forceRetry-parametri
 function loadAmericanoSchedules(forceRetry = false) {
   if (!forceRetry && americanoLoadPromise) return americanoLoadPromise;
-
   const loadPromise = (async () => {
     try {
       const r = await fetch('americano.txt', { cache: 'no-cache' });
@@ -464,19 +910,14 @@ function loadAmericanoSchedules(forceRetry = false) {
       const text = await r.text();
       AMERICANO_SCHEDULES = parseAmericanoTxt(text);
       americanoLoadError = false;
-      const counts = Object.keys(AMERICANO_SCHEDULES).map(Number).sort((a, b) => a - b);
-      console.log('Americano-taulukot ladattu pelaajamäärille:', counts.join(', '));
       return AMERICANO_SCHEDULES;
     } catch (err) {
-      console.error('Americano-taulukoiden lataus epäonnistui:', err);
       AMERICANO_SCHEDULES = {};
       americanoLoadError = true;
-      // AUDIT-FIX: nollaa promise, jotta seuraava kutsu yrittää uudelleen
       if (americanoLoadPromise === loadPromise) americanoLoadPromise = null;
       return AMERICANO_SCHEDULES;
     }
   })();
-
   americanoLoadPromise = loadPromise;
   return loadPromise;
 }
@@ -490,6 +931,8 @@ let editingStartedMidEvent = false;
 let editingMatchIdx = -1;
 let courtsAutoManaged = true;
 let pairingEditorState = null;
+let scoreLockUntil = 0;
+let joinTimer = null;
 
 let state = {
   players: [],
@@ -503,56 +946,45 @@ let state = {
   tiebreakOrder: [],
   americanoMapping: null,
   americanoBlock: 0,
-  // AUDIT-FIX: KoC:n alkuperäinen tasojärjestys satunnaistetaan ja tallennetaan
   kocInitialOrder: null,
   viewIdx: null,
   screen: 'landing'
 };
 
 // ============================================================
-// Omat tapahtumat (localStorage)
+// Omat tapahtumat
 // ============================================================
 const MY_EVENTS_KEY = 'mexicano_events';
+const LAST_PLAYERS_KEY = 'mexicano_last_players';
 
 function getMyEvents() {
-  try {
-    const raw = localStorage.getItem(MY_EVENTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
-  }
+  try { const raw = localStorage.getItem(MY_EVENTS_KEY); return raw ? JSON.parse(raw) : []; }
+  catch (e) { return []; }
 }
-function saveMyEvents(events) {
-  try {
-    localStorage.setItem(MY_EVENTS_KEY, JSON.stringify(events));
-  } catch (e) {
-    console.error('localStorage save failed', e);
-  }
-}
+function saveMyEvents(events) { try { localStorage.setItem(MY_EVENTS_KEY, JSON.stringify(events)); } catch (e) {} }
 function addMyEvent(code, info = {}) {
   const events = getMyEvents();
   const existing = events.find(e => e.code === code);
-  if (existing) {
-    Object.assign(existing, info, { lastActive: Date.now() });
-  } else {
-    events.push({ code, createdAt: Date.now(), lastActive: Date.now(), ...info });
-  }
+  if (existing) Object.assign(existing, info, { lastActive: Date.now() });
+  else events.push({ code, createdAt: Date.now(), lastActive: Date.now(), ...info });
   saveMyEvents(events);
 }
 function removeMyEvent(code) {
   saveMyEvents(getMyEvents().filter(e => e.code !== code));
+}
+function saveLastPlayers(names) {
+  try { localStorage.setItem(LAST_PLAYERS_KEY, JSON.stringify(names)); } catch (e) {}
+}
+function getLastPlayers() {
+  try { const raw = localStorage.getItem(LAST_PLAYERS_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
 }
 
 function renderMyEvents() {
   const card = document.getElementById('myEventsCard');
   const list = document.getElementById('myEventsList');
   const events = getMyEvents();
-  if (events.length === 0) {
-    card.classList.add('hidden');
-    return;
-  }
+  if (events.length === 0) { card.classList.add('hidden'); return; }
   card.classList.remove('hidden');
   events.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
   list.innerHTML = events.map(e => {
@@ -561,32 +993,29 @@ function renderMyEvents() {
     if (e.roundCount) meta.push(e.roundCount + ' kierrosta');
     if (!meta.length) meta.push('Ei aloitettu');
     return `
-      <div class="event-item">
+      <div class="event-item" data-code="${esc(e.code)}" role="button" tabindex="0">
         <div class="event-info">
           <div class="event-code">${esc(e.code)}</div>
           <div class="event-meta">${meta.join(' · ')}</div>
         </div>
-        <div class="event-actions">
-          <button class="btn-small btn-join" data-code="${esc(e.code)}">Liity</button>
-          <button class="btn-small btn-delete" data-code="${esc(e.code)}" title="Poista">🗑</button>
-        </div>
+        <button class="btn-icon-delete" data-code="${esc(e.code)}" aria-label="Poista tapahtuma" title="Poista">🗑</button>
+        <span class="event-chevron">›</span>
       </div>
     `;
   }).join('');
 }
 
 document.getElementById('myEventsList').addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  const code = btn.dataset.code;
-  if (btn.classList.contains('btn-join')) {
-    joinExistingEvent(code);
-  } else if (btn.classList.contains('btn-delete')) {
+  if (e.target.closest('.btn-icon-delete')) {
+    e.stopPropagation();
+    const code = e.target.closest('.btn-icon-delete').dataset.code;
     if (confirm(`Poistetaanko tapahtuma ${code} omasta listastasi pysyvästi?`)) {
-      removeMyEvent(code);
-      renderMyEvents();
+      removeMyEvent(code); renderMyEvents();
     }
+    return;
   }
+  const item = e.target.closest('.event-item');
+  if (item) joinExistingEvent(item.dataset.code);
 });
 
 // ============================================================
@@ -596,7 +1025,6 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
 function setsEqual(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
   if (a.length !== b.length) return false;
@@ -605,33 +1033,22 @@ function setsEqual(a, b) {
   return true;
 }
 
-// AUDIT-FIX: tasapelituki (winner === 2). Tasapeli:
-//   - 'win'-moodissa: 0 pistettä, 0 voittoa kummallekaan
-//   - 'score'-moodissa: molemmille oma toteutunut pistemäärä (ei normalisointia)
 function calcStatPoints(match, winningScore, scoringMode) {
   if (match.winner !== 0 && match.winner !== 1 && match.winner !== 2) return { p1: 0, p2: 0 };
   if (match.winner === 2) {
-    if (scoringMode === 'win') return { p1: 0, p2: 0 };
-    if (typeof match.score1 === 'number' && typeof match.score2 === 'number') {
-      return { p1: match.score1, p2: match.score2 };
-    }
-    return { p1: 0, p2: 0 };
+    if (scoringMode === 'win') return { p1: 1, p2: 1 };
+    if (winningScore > 0) return { p1: winningScore, p2: winningScore };
+    if (typeof match.score1 === 'number' && typeof match.score2 === 'number') return { p1: match.score1, p2: match.score2 };
+    return { p1: 1, p2: 1 };
   }
-  if (scoringMode === 'win') {
-    return { p1: match.winner === 0 ? 1 : 0, p2: match.winner === 1 ? 1 : 0 };
-  }
+  if (scoringMode === 'win') return { p1: match.winner === 0 ? 1 : 0, p2: match.winner === 1 ? 1 : 0 };
   if (typeof match.score1 !== 'number' || typeof match.score2 !== 'number') {
     return { p1: match.winner === 0 ? 1 : 0, p2: match.winner === 1 ? 1 : 0 };
   }
-  if (!winningScore || winningScore <= 0) {
-    return { p1: match.score1, p2: match.score2 };
-  }
+  if (!winningScore || winningScore <= 0) return { p1: match.score1, p2: match.score2 };
   const s1 = match.score1, s2 = match.score2;
-  if (s1 > s2) {
-    return { p1: winningScore, p2: Math.max(0, winningScore - (s1 - s2)) };
-  } else if (s2 > s1) {
-    return { p1: Math.max(0, winningScore - (s2 - s1)), p2: winningScore };
-  }
+  if (s1 > s2) return { p1: winningScore, p2: Math.max(0, winningScore - (s1 - s2)) };
+  if (s2 > s1) return { p1: Math.max(0, winningScore - (s2 - s1)), p2: winningScore };
   return { p1: 0, p2: 0 };
 }
 
@@ -649,9 +1066,7 @@ function showLoading(msg) {
   document.getElementById('loadingOverlay').classList.remove('hidden');
   document.getElementById('loadingMessage').textContent = msg;
 }
-function hideLoading() {
-  document.getElementById('loadingOverlay').classList.add('hidden');
-}
+function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
 function setLandingError(msg) {
   const el = document.getElementById('landingError');
   if (el) el.textContent = msg;
@@ -661,8 +1076,7 @@ window.addEventListener('error', (e) => {
   if (state.screen === 'landing') setLandingError('Virhe: ' + (e.message || 'tuntematon'));
 });
 window.addEventListener('unhandledrejection', (e) => {
-  const msg = e.reason?.message || String(e.reason);
-  if (state.screen === 'landing') setLandingError('Virhe: ' + msg);
+  if (state.screen === 'landing') setLandingError('Virhe: ' + (e.reason?.message || String(e.reason)));
 });
 
 // ============================================================
@@ -671,15 +1085,13 @@ window.addEventListener('unhandledrejection', (e) => {
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 function generateCode() {
   const buf = new Uint8Array(5);
-  if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Selain ei tue satunnaislukugeneraattoria. Avaa sivu HTTPS-osoitteesta.');
+  if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Selain ei tue satunnaislukugeneraattoria.');
   crypto.getRandomValues(buf);
   let code = '';
   for (let i = 0; i < 5; i++) code += ALPHABET[buf[i] % 32];
   return code;
 }
-function isValidCode(code) {
-  return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/.test(code);
-}
+function isValidCode(code) { return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{5}$/.test(code); }
 
 async function createNewEvent() {
   setLandingError('');
@@ -691,7 +1103,7 @@ async function createNewEvent() {
       const snap = await get(ref(db, `events/${candidate}`));
       if (!snap.exists()) code = candidate;
     }
-    if (!code) throw new Error('Koodin luonti epäonnistui. Yritä uudelleen.');
+    if (!code) throw new Error('Koodin luonti epäonnistui.');
     await set(ref(db, `events/${code}`), { createdAt: Date.now() });
     addMyEvent(code, { started: false });
     navigateToEvent(code);
@@ -704,14 +1116,12 @@ async function createNewEvent() {
 async function joinExistingEvent(code) {
   setLandingError('');
   code = (code || '').toUpperCase().trim();
-  if (!isValidCode(code)) { setLandingError('Koodi on 5 merkkiä (ei 0, 1, I tai O).'); return; }
+  if (!isValidCode(code)) { setLandingError('Koodi on 5 merkkiä.'); return; }
   showLoading('Etsitään tapahtumaa...');
   try {
     const snap = await get(ref(db, `events/${code}`));
     if (!snap.exists()) { hideLoading(); setLandingError('Tapahtumaa ei löytynyt koodilla ' + code + '.'); return; }
-    // AUDIT-FIX: lisää liittynyt tapahtuma "Omat tapahtumat" -listaan
-    const data = snap.val();
-    const s = data.state;
+    const s = snap.val().state;
     addMyEvent(code, {
       started: !!(s && s.currentRound),
       playerCount: s ? (s.players || []).length : 0,
@@ -751,7 +1161,7 @@ function exitEvent() {
 }
 
 // ============================================================
-// Firebase-kuuntelija
+// Firebase
 // ============================================================
 function attachEventListener() {
   if (!eventCode) return;
@@ -781,19 +1191,14 @@ function attachEventListener() {
         state.americanoBlock = typeof s.americanoBlock === 'number' ? s.americanoBlock : 0;
         state.kocInitialOrder = s.kocInitialOrder || null;
       }
-      if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) {
-        state.viewIdx = null;
-      }
+      if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) state.viewIdx = null;
 
       if (s) {
-        const myEvts = getMyEvents();
-        if (myEvts.some(e => e.code === eventCode)) {
-          addMyEvent(eventCode, {
-            playerCount: (state.players || []).length,
-            roundCount: (state.rounds || []).length + (state.currentRound ? 1 : 0),
-            started: !!state.currentRound,
-          });
-        }
+        addMyEvent(eventCode, {
+          playerCount: (state.players || []).length,
+          roundCount: (state.rounds || []).length + (state.currentRound ? 1 : 0),
+          started: !!state.currentRound,
+        });
       }
 
       if (wasInitializing) {
@@ -825,71 +1230,46 @@ function generateRoundForState(st, existingRounds) {
   return generateMexicanoRound(st, existingRounds);
 }
 
-// ----- Americano -----
 function generateAmericanoRound(st, existingRounds) {
   const n = st.players.length;
   const schedule = AMERICANO_SCHEDULES[n];
   if (!schedule || schedule.length === 0) return null;
-
   const scheduleLen = schedule.length;
   const roundInBlock = existingRounds.length % scheduleLen;
   const currentBlock = Math.floor(existingRounds.length / scheduleLen);
-
   let mapping;
-  if (st.americanoMapping && st.americanoBlock === currentBlock &&
-      st.americanoMapping.length === n) {
-    mapping = st.americanoMapping.slice();
-  } else if (currentBlock === 0) {
-    mapping = Array.from({ length: n }, (_, i) => i);
-  } else {
+  if (st.americanoMapping && st.americanoBlock === currentBlock && st.americanoMapping.length === n) mapping = st.americanoMapping.slice();
+  else if (currentBlock === 0) mapping = Array.from({ length: n }, (_, i) => i);
+  else {
     mapping = Array.from({ length: n }, (_, i) => i);
     for (let i = mapping.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [mapping[i], mapping[j]] = [mapping[j], mapping[i]];
     }
   }
-
   const roundSchedule = schedule[roundInBlock];
   if (!roundSchedule) return null;
-
   const matches = roundSchedule.map(md => ({
     p1: [mapping[md[0]], mapping[md[1]]],
     p2: [mapping[md[2]], mapping[md[3]]],
     winner: null, score1: null, score2: null,
   }));
-
   const playingSet = new Set();
-  for (const m of matches) {
-    for (const pi of [...m.p1, ...m.p2]) playingSet.add(pi);
-  }
+  for (const m of matches) for (const pi of [...m.p1, ...m.p2]) playingSet.add(pi);
   const sitOuts = [];
   for (let i = 0; i < n; i++) if (!playingSet.has(i)) sitOuts.push(i);
-
-  return {
-    sitOuts,
-    matches,
-    tiebreakOrder: st.tiebreakOrder || Array.from({ length: n }, (_, i) => i),
-    americanoMapping: mapping,
-    americanoBlock: currentBlock,
-  };
+  return { sitOuts, matches, tiebreakOrder: st.tiebreakOrder || Array.from({ length: n }, (_, i) => i), americanoMapping: mapping, americanoBlock: currentBlock };
 }
 
-// ----- KoC -----
-// AUDIT-FIX: satunnaistettu alkujärjestys (kocInitialOrder).
-// Tasot lasketaan aina tästä samasta alkuasetelmasta, jotta tasot eivät "aJehdu"
-// kierrosten välillä. Tauolla olevan pelaajan taso ei muutu (dokumentoitu).
-// Tasapeli (winner === 2) ei liikuta kumpaakaan paria.
 function computeKocLevels(playerCount, rounds, courts, initialOrder) {
   let levels;
   if (initialOrder && initialOrder.length === playerCount) {
     levels = new Array(playerCount);
     for (let pos = 0; pos < playerCount; pos++) {
-      const playerIdx = initialOrder[pos];
-      levels[playerIdx] = Math.min(courts, Math.floor(pos / 4) + 1);
+      levels[initialOrder[pos]] = Math.min(courts, Math.floor(pos / 4) + 1);
     }
   } else {
-    levels = Array.from({ length: playerCount }, (_, i) =>
-      Math.min(courts, Math.floor(i / 4) + 1));
+    levels = Array.from({ length: playerCount }, (_, i) => Math.min(courts, Math.floor(i / 4) + 1));
   }
   for (const round of rounds) {
     const newLevels = [...levels];
@@ -902,7 +1282,6 @@ function computeKocLevels(playerCount, rounds, courts, initialOrder) {
         for (const idx of winPair) newLevels[idx] = Math.max(1, courtNum - 1);
         for (const idx of losePair) newLevels[idx] = Math.min(courts, courtNum + 1);
       }
-      // winner === 2 (tie): ei muutosta
     }
     levels = newLevels;
   }
@@ -914,9 +1293,7 @@ function deriveFromCourt(playerIdx, rounds, fallbackLevel) {
     const round = rounds[r];
     for (let ci = 0; ci < round.matches.length; ci++) {
       const m = round.matches[ci];
-      if (m.p1.includes(playerIdx) || m.p2.includes(playerIdx)) {
-        return ci + 1;
-      }
+      if (m.p1.includes(playerIdx) || m.p2.includes(playerIdx)) return ci + 1;
     }
   }
   return fallbackLevel;
@@ -926,17 +1303,11 @@ function generateKocRound(st, existingRounds) {
   const n = st.players.length;
   const courts = st.courts;
   const sitOutCount = n - courts * 4;
-  if (sitOutCount < 0) return null;
-  // AUDIT-FIX: KoC vaatii vähintään 2 kenttää
-  if (courts < 2) return null;
-
+  if (sitOutCount < 0 || courts < 2) return null;
   const counts = new Array(n).fill(0);
-  for (const r of existingRounds) {
-    for (const idx of r.sitOuts) counts[idx]++;
-  }
+  for (const r of existingRounds) for (const idx of r.sitOuts) counts[idx]++;
   const isNewCycle = counts.every(c => c === counts[0]);
-  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n)
-    ? st.tiebreakOrder.slice() : null;
+  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n) ? st.tiebreakOrder.slice() : null;
   if (isNewCycle || !tiebreakOrder) {
     const all = Array.from({ length: n }, (_, i) => i);
     for (let i = all.length - 1; i > 0; i--) {
@@ -948,8 +1319,6 @@ function generateKocRound(st, existingRounds) {
     const recent = all.filter(i => lastSit.includes(i));
     tiebreakOrder = [...others, ...recent];
   }
-
-  // AUDIT-FIX: pysyvä satunnainen alkujärjestys tasoille
   let kocInitialOrder = st.kocInitialOrder;
   if (!kocInitialOrder || kocInitialOrder.length !== n) {
     kocInitialOrder = Array.from({ length: n }, (_, i) => i);
@@ -958,9 +1327,7 @@ function generateKocRound(st, existingRounds) {
       [kocInitialOrder[i], kocInitialOrder[j]] = [kocInitialOrder[j], kocInitialOrder[i]];
     }
   }
-
   const levels = computeKocLevels(n, existingRounds, courts, kocInitialOrder);
-
   const tiePos = new Array(n);
   for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
   const sorted = Array.from({ length: n }, (_, i) => i);
@@ -968,48 +1335,30 @@ function generateKocRound(st, existingRounds) {
     if (counts[a] !== counts[b]) return counts[a] - counts[b];
     return tiePos[a] - tiePos[b];
   });
-
   const sitOutIndices = sorted.slice(0, sitOutCount);
   const playing = sorted.slice(sitOutCount);
-
-  // AUDIT-FIX: käytä tiePos:ia (satunnainen) indeksin sijaan tasapelien ratkaisussa
   playing.sort((a, b) => levels[a] - levels[b] || tiePos[a] - tiePos[b]);
-
   const matches = [];
   for (let c = 0; c < courts; c++) {
     const group = playing.slice(c * 4, c * 4 + 4);
-    if (group.length < 4) {
-      matches.push({ p1: group.slice(0, 2), p2: group.slice(2, 4), winner: null, score1: null, score2: null });
-      continue;
-    }
+    if (group.length < 4) { matches.push({ p1: group.slice(0, 2), p2: group.slice(2, 4), winner: null, score1: null, score2: null }); continue; }
     const infos = group.map(idx => ({ idx, from: deriveFromCourt(idx, existingRounds, levels[idx]) }));
-    infos.sort((a, b) => {
-      if (a.from !== b.from) return a.from - b.from;
-      return a.idx - b.idx;
-    });
+    infos.sort((a, b) => { if (a.from !== b.from) return a.from - b.from; return a.idx - b.idx; });
     const p1 = [infos[0].idx, infos[2].idx];
     const p2 = [infos[1].idx, infos[3].idx];
     matches.push({ p1, p2, winner: null, score1: null, score2: null });
   }
-
   return { sitOuts: sitOutIndices, matches, tiebreakOrder, kocInitialOrder };
 }
 
-// ----- Mexicano -----
 function generateMexicanoRound(st, existingRounds) {
   const n = st.players.length;
   const sitOutCount = n - st.courts * 4;
   if (sitOutCount < 0) return null;
-
   const counts = new Array(n).fill(0);
-  for (const r of existingRounds) {
-    for (const idx of r.sitOuts) counts[idx]++;
-  }
-
+  for (const r of existingRounds) for (const idx of r.sitOuts) counts[idx]++;
   const isNewCycle = counts.every(c => c === counts[0]);
-  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n)
-    ? st.tiebreakOrder.slice() : null;
-
+  let tiebreakOrder = (st.tiebreakOrder && st.tiebreakOrder.length === n) ? st.tiebreakOrder.slice() : null;
   if (isNewCycle || !tiebreakOrder) {
     const all = Array.from({ length: n }, (_, i) => i);
     for (let i = all.length - 1; i > 0; i--) {
@@ -1021,7 +1370,6 @@ function generateMexicanoRound(st, existingRounds) {
     const recent = all.filter(i => lastSit.includes(i));
     tiebreakOrder = [...others, ...recent];
   }
-
   const tiePos = new Array(n);
   for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
   const sorted = Array.from({ length: n }, (_, i) => i);
@@ -1029,20 +1377,18 @@ function generateMexicanoRound(st, existingRounds) {
     if (counts[a] !== counts[b]) return counts[a] - counts[b];
     return tiePos[a] - tiePos[b];
   });
-
   const sitOutIndices = sorted.slice(0, sitOutCount);
   const playing = sorted.slice(sitOutCount);
-
   const stats = st.players.map(() => ({ points: 0, wins: 0 }));
   for (const r of existingRounds) {
     for (const m of r.matches) {
-      // AUDIT-FIX: tasapelit mukaan tilastoihin
       if (m.winner === 0 || m.winner === 1 || m.winner === 2) {
         const sp = calcStatPoints(m, st.winningScore || 0, st.scoringMode || 'win');
         for (const i of m.p1) stats[i].points += sp.p1;
         for (const i of m.p2) stats[i].points += sp.p2;
         if (m.winner === 0) for (const i of m.p1) stats[i].wins++;
         else if (m.winner === 1) for (const i of m.p2) stats[i].wins++;
+        else if (m.winner === 2) { for (const i of m.p1) stats[i].wins++; for (const i of m.p2) stats[i].wins++; }
       }
     }
   }
@@ -1051,7 +1397,6 @@ function generateMexicanoRound(st, existingRounds) {
     if (stats[b].wins !== stats[a].wins) return stats[b].wins - stats[a].wins;
     return a - b;
   });
-
   const matches = [];
   for (let c = 0; c < st.courts; c++) {
     const g = playing.slice(c * 4, c * 4 + 4);
@@ -1060,7 +1405,6 @@ function generateMexicanoRound(st, existingRounds) {
     else { p1 = [g[0], g[2]]; p2 = [g[1], g[3]]; }
     matches.push({ p1, p2, winner: null, score1: null, score2: null });
   }
-
   return { sitOuts: sitOutIndices, matches, tiebreakOrder };
 }
 
@@ -1073,10 +1417,10 @@ function computeStats() {
     for (const idx of round.sitOuts) stats[idx].sitOuts++;
     for (const m of round.matches) {
       for (const idx of [...m.p1, ...m.p2]) stats[idx].games++;
-      // AUDIT-FIX: tasapelit mukaan pisteisiin
       if (m.winner === 0 || m.winner === 1 || m.winner === 2) {
         if (m.winner === 0) for (const idx of m.p1) stats[idx].wins++;
         else if (m.winner === 1) for (const idx of m.p2) stats[idx].wins++;
+        else if (m.winner === 2) { for (const idx of m.p1) stats[idx].wins++; for (const idx of m.p2) stats[idx].wins++; }
         const sp = calcStatPoints(m, state.winningScore, state.scoringMode);
         for (const idx of m.p1) stats[idx].points += sp.p1;
         for (const idx of m.p2) stats[idx].points += sp.p2;
@@ -1087,7 +1431,7 @@ function computeStats() {
 }
 
 // ============================================================
-// Asetusnäkymä
+// Setup
 // ============================================================
 function renderSetup() {
   document.getElementById('playersInput').value = state.players.map(p => p.name).join('\n');
@@ -1097,18 +1441,29 @@ function renderSetup() {
   if (pr) pr.checked = true;
   const sr = document.querySelector(`input[name="scoringMode"][value="${state.scoringMode}"]`);
   if (sr) sr.checked = true;
-
   document.getElementById('courtsInput').value = state.courts;
   document.getElementById('winningScoreInput').value = state.winningScore;
   updatePairingTypeVisibility();
   updateWinningScoreVisibility();
 
-  document.getElementById('setupEventInfo').textContent = 'Tapahtuma ' + eventCode;
   const isMidEvent = state.rounds.length > 0 || state.currentRound !== null;
   editingStartedMidEvent = isMidEvent;
   courtsAutoManaged = !isMidEvent;
   document.getElementById('cancelSettingsBtn').style.display = isMidEvent ? 'block' : 'none';
   document.getElementById('startBtn').textContent = isMidEvent ? 'Tallenna asetukset' : 'Aloita';
+
+  // Prefill-painike
+  const lastPlayers = getLastPlayers();
+  const btn = document.getElementById('useLastPlayersBtn');
+  if (lastPlayers && lastPlayers.length > 0 && document.getElementById('playersInput').value.trim() === '') {
+    btn.textContent = `Käytä viimeisintä listaa (${lastPlayers.length})`;
+    btn.classList.remove('hidden');
+  } else if (lastPlayers && lastPlayers.length > 0) {
+    btn.textContent = `Käytä viimeisintä listaa (${lastPlayers.length})`;
+    btn.classList.remove('hidden');
+  } else {
+    btn.classList.add('hidden');
+  }
   updateSetupHelpers();
 }
 
@@ -1119,9 +1474,9 @@ function parsePlayers(text) {
 function updatePairingTypeVisibility() {
   const type = document.querySelector('input[name="pairingType"]:checked')?.value || 'mexicano';
   document.getElementById('mexicanoPairingCard').classList.toggle('hidden', type !== 'mexicano');
-  document.getElementById('mexicanoInfo').classList.toggle('hidden', type !== 'mexicano');
-  document.getElementById('americanoInfo').classList.toggle('hidden', type !== 'americano');
-  document.getElementById('kocInfo').classList.toggle('hidden', type !== 'koc');
+  document.getElementById('mexicanoDetails').classList.toggle('hidden', type !== 'mexicano');
+  document.getElementById('americanoDetails').classList.toggle('hidden', type !== 'americano');
+  document.getElementById('kocDetails').classList.toggle('hidden', type !== 'koc');
   updateSetupHelpers();
 }
 
@@ -1146,65 +1501,50 @@ function updateSetupHelpers() {
   if (type === 'americano') {
     const loaded = Object.keys(AMERICANO_SCHEDULES).length > 0;
     if (!loaded) {
-      ci.disabled = false;
-      ci.max = maxCourts;
-      // AUDIT-FIX: kerro latausvirheestä ja kehota yrittämään uudelleen
+      ci.disabled = false; ci.max = maxCourts;
       document.getElementById('courtsHelper').textContent = americanoLoadError
-        ? 'Americano-taulukoiden lataus epäonnistui. Yritä uudelleen tai käytä toista paritustyyppiä.'
+        ? 'Americano-lataus epäonnistui. Yritä uudelleen tai vaihda tyyppiä.'
         : 'Ladataan Americano-taulukoita...';
       return;
     }
     const schedCourts = getScheduleCourts(n);
     if (schedCourts !== null) {
-      ci.value = schedCourts;
-      ci.max = schedCourts;
-      ci.disabled = true;
-      document.getElementById('courtsHelper').textContent =
-        `Americano: ${schedCourts} kenttää (kaavion mukainen)`;
+      ci.value = schedCourts; ci.max = schedCourts; ci.disabled = true;
+      document.getElementById('courtsHelper').textContent = `Americano: ${schedCourts} kenttää (kaavion mukainen)`;
     } else {
-      ci.disabled = false;
-      ci.max = maxCourts;
+      ci.disabled = false; ci.max = maxCourts;
       const supported = Object.keys(AMERICANO_SCHEDULES).map(Number).sort((a,b)=>a-b);
       document.getElementById('courtsHelper').textContent = n > 0
-        ? `Americano-taulukkoa ei ole ${n} pelaajalle (tuetut: ${supported.join(', ')}). Käytetään Mexicanoa.`
+        ? `Ei taulukkoa ${n} pelaajalle (tuetut: ${supported.join(', ')}). Käytetään Mexicanoa.`
         : 'Tarvitaan vähintään 4 pelaajaa';
     }
     return;
   }
 
-  // AUDIT-FIX: KoC vaatii vähintään 2 kenttää ja 8 pelaajaa
   if (type === 'koc') {
     if (maxCourts < 2) {
-      ci.disabled = true;
-      ci.value = Math.max(1, maxCourts);
-      document.getElementById('courtsHelper').textContent =
-        'King of the Court vaatii vähintään 8 pelaajaa (2 kenttää).';
+      ci.disabled = true; ci.value = Math.max(1, maxCourts);
+      document.getElementById('courtsHelper').textContent = 'King of the Court vaatii vähintään 8 pelaajaa (2 kenttää).';
       return;
     }
-    ci.disabled = false;
-    ci.min = 2;
-    ci.max = maxCourts;
+    ci.disabled = false; ci.min = 2; ci.max = maxCourts;
     if (courtsAutoManaged) ci.value = maxCourts;
     else {
       const cur = parseInt(ci.value, 10);
       if (isNaN(cur) || cur < 2) ci.value = 2;
       else if (cur > maxCourts) ci.value = maxCourts;
     }
-    document.getElementById('courtsHelper').textContent =
-      `Min 2, max ${maxCourts} kenttää (KoC vaatii vähintään 2).`;
+    document.getElementById('courtsHelper').textContent = `Min 2, max ${maxCourts} kenttää.`;
     return;
   }
 
-  ci.disabled = false;
-  ci.min = 1;
-  ci.max = maxCourts;
+  ci.disabled = false; ci.min = 1; ci.max = maxCourts;
   document.getElementById('courtsHelper').textContent = n >= 4
     ? `Max ${maxCourts} kenttää (${maxCourts * 4} pelaajaa)`
     : 'Tarvitaan vähintään 4 pelaajaa';
 
-  if (courtsAutoManaged) {
-    ci.value = n >= 4 ? maxCourts : 1;
-  } else {
+  if (courtsAutoManaged) ci.value = n >= 4 ? maxCourts : 1;
+  else {
     const cur = parseInt(ci.value, 10);
     if (isNaN(cur) || cur < 1) ci.value = 1;
     else if (cur > maxCourts) ci.value = maxCourts;
@@ -1223,73 +1563,56 @@ async function applySettings() {
   const winningScoreRaw = parseInt(document.getElementById('winningScoreInput').value, 10);
   const winningScore = isNaN(winningScoreRaw) || winningScoreRaw < 0 ? 0 : winningScoreRaw;
 
-  // AUDIT-FIX: KoC-validointi
   if (pairingType === 'koc') {
-    if (names.length < 8) {
-      errEl.textContent = 'King of the Court vaatii vähintään 8 pelaajaa.';
-      return;
-    }
-    if (isNaN(courts) || courts < 2) {
-      errEl.textContent = 'King of the Court vaatii vähintään 2 kenttää.';
-      return;
-    }
+    if (names.length < 8) { errEl.textContent = 'King of the Court vaatii vähintään 8 pelaajaa.'; return; }
+    if (isNaN(courts) || courts < 2) { errEl.textContent = 'King of the Court vaatii vähintään 2 kenttää.'; return; }
   }
 
   if (pairingType === 'americano') {
     if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
       showLoading('Ladataan Americano-taulukoita...');
-      await loadAmericanoSchedules(true); // AUDIT-FIX: forceRetry
+      await loadAmericanoSchedules(true);
       hideLoading();
     }
     const sched = AMERICANO_SCHEDULES[names.length];
     if (!sched || sched.length === 0) {
-      errEl.textContent = `Americano-taulukkoa ei löytynyt ${names.length} pelaajalle. Tarkista americano.txt tai valitse toinen paritustyyppi.`;
+      errEl.textContent = `Americano-taulukkoa ei löytynyt ${names.length} pelaajalle.`;
       return;
     }
     courts = sched[0].length;
   }
 
   const maxCourts = Math.floor(names.length / 4);
-  if (isNaN(courts) || courts < 1) { errEl.textContent = 'Kenttiä oltava vähintään 1.'; return; }
-  if (courts > maxCourts) { errEl.textContent = `Kenttiä voi olla enintään ${maxCourts}.`; return; }
+  if (isNaN(courts) || courts < 1) { errEl.textContent = 'Kenttiä vähintään 1.'; return; }
+  if (courts > maxCourts) { errEl.textContent = `Kenttiä enintään ${maxCourts}.`; return; }
 
-  const playersChanged = JSON.stringify(names.map(p => p.name)) !==
-                         JSON.stringify(state.players.map(p => p.name));
+  const playersChanged = JSON.stringify(names.map(p => p.name)) !== JSON.stringify(state.players.map(p => p.name));
   const pairingTypeChanged = (state.pairingType || 'mexicano') !== pairingType;
   const courtsChanged = state.courts !== courts;
   const pairingChanged = state.pairingMode !== pairingMode;
   const scoringModeChanged = state.scoringMode !== scoringMode;
   const winningScoreChanged = state.winningScore !== winningScore;
-  // AUDIT-FIX: tasapelit lasketaan tuloksiksi
-  const anyResults = state.currentRound &&
-                     state.currentRound.matches.some(m => m.winner === 0 || m.winner === 1 || m.winner === 2);
+  const anyResults = state.currentRound && state.currentRound.matches.some(m => m.winner === 0 || m.winner === 1 || m.winner === 2);
 
   let resetRounds = false;
   let regenerateCurrent = false;
   if (editingStartedMidEvent) {
     if (playersChanged) {
-      if (!confirm('Pelaajalista on muuttunut. Tämä nollaa kierrokset ja tilastot. Jatketaanko?')) return;
-      resetRounds = true;
-      regenerateCurrent = true;
+      if (!confirm('Pelaajalista muuttui. Tämä nollaa kierrokset. Jatketaanko?')) return;
+      resetRounds = true; regenerateCurrent = true;
     } else if (pairingTypeChanged) {
       if (!confirm('Paritustyypin muutos nollaa kierrokset. Jatketaanko?')) return;
-      resetRounds = true;
-      regenerateCurrent = true;
+      resetRounds = true; regenerateCurrent = true;
     } else if (courtsChanged || pairingChanged) {
       if (anyResults && !confirm('Asetukset muuttuivat. Nykyisen kierroksen tulokset menetetään. Jatketaanko?')) return;
       regenerateCurrent = true;
     } else if (anyResults && (scoringModeChanged || winningScoreChanged)) {
-      if (!confirm('Pistelaskennan asetukset muuttuivat. Kaikki tilastot lasketaan uusilla asetuksilla. Jatketaanko?')) return;
+      if (!confirm('Pistelaskenta muuttuu. Kaikki tilastot lasketaan uusilla asetuksilla. Jatketaanko?')) return;
     }
   }
 
   const newState = {
-    players: names,
-    pairingType,
-    pairingMode,
-    scoringMode,
-    winningScore,
-    courts,
+    players: names, pairingType, pairingMode, scoringMode, winningScore, courts,
     rounds: resetRounds ? [] : state.rounds,
   };
 
@@ -1299,32 +1622,25 @@ async function applySettings() {
     if (!resetRounds && state.currentRound) lastSitOuts = state.currentRound.sitOuts || [];
     else if (!resetRounds && state.rounds.length > 0) lastSitOuts = state.rounds[state.rounds.length - 1].sitOuts || [];
     const stForGen = {
-      players: names, pairingType, pairingMode, courts,
-      scoringMode, winningScore,
+      players: names, pairingType, pairingMode, courts, scoringMode, winningScore,
       tiebreakOrder: resetRounds ? [] : state.tiebreakOrder,
       lastRoundSitOuts: lastSitOuts,
       americanoMapping: resetRounds ? null : state.americanoMapping,
       americanoBlock: resetRounds ? 0 : state.americanoBlock,
-      // AUDIT-FIX: kocInitialOrder välitetään
       kocInitialOrder: resetRounds ? null : state.kocInitialOrder,
     };
     const gen = generateRoundForState(stForGen, newState.rounds);
-    if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui. Tarkista pelaajamäärä ja kentät.'; return; }
+    if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui.'; return; }
     newState.currentRound = { sitOuts: gen.sitOuts, matches: gen.matches };
     newState.tiebreakOrder = gen.tiebreakOrder;
     if (gen.americanoMapping !== undefined) {
-      newState.americanoMapping = gen.americanoMapping;
-      newState.americanoBlock = gen.americanoBlock;
+      newState.americanoMapping = gen.americanoMapping; newState.americanoBlock = gen.americanoBlock;
     } else {
       newState.americanoMapping = resetRounds ? null : (state.americanoMapping || null);
       newState.americanoBlock = resetRounds ? 0 : (state.americanoBlock || 0);
     }
-    // AUDIT-FIX: kocInitialOrder
-    if (gen.kocInitialOrder !== undefined) {
-      newState.kocInitialOrder = gen.kocInitialOrder;
-    } else {
-      newState.kocInitialOrder = resetRounds ? null : (state.kocInitialOrder || null);
-    }
+    if (gen.kocInitialOrder !== undefined) newState.kocInitialOrder = gen.kocInitialOrder;
+    else newState.kocInitialOrder = resetRounds ? null : (state.kocInitialOrder || null);
   } else {
     newState.currentRound = state.currentRound;
     newState.tiebreakOrder = state.tiebreakOrder;
@@ -1336,20 +1652,20 @@ async function applySettings() {
   showLoading('Tallennetaan...');
   try {
     await set(ref(db, `events/${eventCode}/state`), newState);
+    // Tallenna viimeisin pelaajalista
+    saveLastPlayers(names.map(p => p.name));
     hideLoading();
-    state.players = newState.players;
-    state.pairingType = newState.pairingType;
-    state.pairingMode = newState.pairingMode;
-    state.scoringMode = newState.scoringMode;
-    state.winningScore = newState.winningScore;
-    state.courts = newState.courts;
-    state.rounds = newState.rounds;
-    state.currentRound = newState.currentRound;
-    state.tiebreakOrder = newState.tiebreakOrder;
-    state.americanoMapping = newState.americanoMapping || null;
-    state.americanoBlock = newState.americanoBlock || 0;
-    state.kocInitialOrder = newState.kocInitialOrder || null;
-    state.viewIdx = null;
+    Object.assign(state, {
+      players: newState.players, pairingType: newState.pairingType,
+      pairingMode: newState.pairingMode, scoringMode: newState.scoringMode,
+      winningScore: newState.winningScore, courts: newState.courts,
+      rounds: newState.rounds, currentRound: newState.currentRound,
+      tiebreakOrder: newState.tiebreakOrder,
+      americanoMapping: newState.americanoMapping || null,
+      americanoBlock: newState.americanoBlock || 0,
+      kocInitialOrder: newState.kocInitialOrder || null,
+      viewIdx: null,
+    });
     showScreen('main');
     renderMain();
   } catch (e) {
@@ -1378,28 +1694,28 @@ function renderMain() {
   const vd = getViewData();
   if (!vd.round) return;
 
-  document.getElementById('mainTitle').textContent =
-    `${getTypeLabel()} · ${state.players.length} pelaajaa · ${eventCode}`;
-  document.getElementById('roundInfo').textContent =
-    `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`;
-
-  const navLabel = document.getElementById('roundNavLabel');
-  navLabel.innerHTML = `Kierros ${vd.roundNumber} / ${state.rounds.length + 1}`
+  // Topbar
+  const total = state.rounds.length + 1;
+  const info = document.getElementById('topbarMainInfo');
+  info.innerHTML = `K ${vd.roundNumber}/${total}<span class="dot">·</span>${state.players.length}p`
     + (vd.isCurrent ? '' : '<span class="past-tag">mennyt</span>');
-
   document.getElementById('prevRoundBtn').disabled = !canGoBack();
   document.getElementById('nextRoundArrowBtn').disabled = !canGoForward();
   document.getElementById('pastRoundBanner').classList.toggle('hidden', vd.isCurrent);
-  document.getElementById('editPairingBtn').classList.toggle('hidden', !vd.isCurrent);
 
+  // Sitout
   const sitoutNames = vd.round.sitOuts.map(i => state.players[i].name);
-  document.getElementById('sitoutBanner').innerHTML = sitoutNames.length
-    ? `<b>Tauolla:</b> ${sitoutNames.map(esc).join(', ')}`
-    : `<b>Kaikki pelaavat</b> — ei taukoja`;
+  const sitoutBanner = document.getElementById('sitoutBanner');
+  if (sitoutNames.length > 0) {
+    sitoutBanner.classList.remove('hidden');
+    sitoutBanner.innerHTML = `<b>Tauolla:</b> ${sitoutNames.map(esc).join(', ')}`;
+  } else {
+    sitoutBanner.classList.add('hidden');
+  }
 
+  // Kenttärivit — SÄILYTETTY ENNALLAAN
   const container = document.getElementById('courtsContainer');
   container.innerHTML = '';
-
   const list = document.createElement('div');
   list.className = 'court-list';
 
@@ -1414,9 +1730,7 @@ function renderMain() {
 
     row.appendChild(makeCompactPair(vd, m, 0, mi));
 
-    // AUDIT-FIX: klikattava tulos-solu, tukee tasapeliä
-    const scoreClass = m.winner === 2 ? ' tie'
-                     : (m.winner === 0 || m.winner === 1) ? ' winner' : '';
+    const scoreClass = m.winner === 2 ? ' tie' : (m.winner === 0 || m.winner === 1) ? ' winner' : '';
     const scoreBtn = document.createElement('button');
     scoreBtn.type = 'button';
     scoreBtn.className = 'compact-score' + scoreClass;
@@ -1432,12 +1746,8 @@ function renderMain() {
       }
     }
     scoreBtn.addEventListener('click', () => {
-      if (state.scoringMode === 'win') {
-        // win-moodissa klikkaus asettaa/poistaa tasapelin
-        selectWinner(vd, mi, 2);
-      } else {
-        openScoreModal(vd, mi);
-      }
+      if (state.scoringMode === 'win') selectWinner(vd, mi, 2);
+      else openScoreModal(vd, mi);
     });
     row.appendChild(scoreBtn);
 
@@ -1476,18 +1786,17 @@ function makeCompactPair(vd, match, pairIdx, matchIdx) {
 function updateBottomButton(vd) {
   const btn = document.getElementById('nextRoundBtn');
   if (vd.isCurrent) {
-    btn.textContent = 'Seuraava kierros';
-    // AUDIT-FIX: tasapeli lasketaan tulokseksi
-    btn.disabled = !vd.round.matches.every(m => m.winner === 0 || m.winner === 1 || m.winner === 2);
+    const total = vd.round.matches.length;
+    const done = vd.round.matches.filter(m => m.winner === 0 || m.winner === 1 || m.winner === 2).length;
+    const allDone = done === total;
+    btn.textContent = allDone ? 'Seuraava kierros' : `Syötä tulokset ${done}/${total}`;
+    btn.disabled = !allDone;
   } else {
     btn.textContent = 'Palaa nykyiseen kierrokseen';
     btn.disabled = false;
   }
 }
 
-// ============================================================
-// Navigointi
-// ============================================================
 function canGoBack() {
   if (state.rounds.length === 0) return false;
   if (state.viewIdx === null) return true;
@@ -1498,48 +1807,36 @@ function goBack() {
   if (!canGoBack()) return;
   if (state.viewIdx === null) state.viewIdx = state.rounds.length - 1;
   else state.viewIdx--;
-  renderMain();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  renderMain(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function goForward() {
   if (!canGoForward()) return;
   if (state.viewIdx + 1 >= state.rounds.length) state.viewIdx = null;
   else state.viewIdx++;
-  renderMain();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  renderMain(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ============================================================
-// Tuloksen tallennus
+// Tulos
 // ============================================================
 function matchPath(vd, matchIdx) {
   if (vd.isCurrent) return `events/${eventCode}/state/currentRound/matches/${matchIdx}`;
   return `events/${eventCode}/state/rounds/${vd.idx}/matches/${matchIdx}`;
 }
 
-// AUDIT-FIX: tukee tasapeliä (pairIdx === 2)
 async function selectWinner(vd, matchIdx, pairIdx) {
+  if (Date.now() < scoreLockUntil) return; // Estä tuplanapautus
+  scoreLockUntil = Date.now() + 250;
   const m = vd.round.matches[matchIdx];
   const p = matchPath(vd, matchIdx);
   try {
     if (pairIdx === 2) {
-      if (m.winner === 2) {
-        // poista tasapeli
-        await update(ref(db, p), { winner: null, score1: null, score2: null });
-      } else {
-        await update(ref(db, p), { winner: 2, score1: 1, score2: 1 });
-      }
+      if (m.winner === 2) await update(ref(db, p), { winner: null, score1: null, score2: null });
+      else await update(ref(db, p), { winner: 2, score1: 1, score2: 1 });
       return;
     }
-    if (m.winner === pairIdx) {
-      await update(ref(db, p), { winner: null, score1: null, score2: null });
-    } else {
-      await update(ref(db, p), {
-        winner: pairIdx,
-        score1: pairIdx === 0 ? 1 : 0,
-        score2: pairIdx === 0 ? 0 : 1
-      });
-    }
+    if (m.winner === pairIdx) await update(ref(db, p), { winner: null, score1: null, score2: null });
+    else await update(ref(db, p), { winner: pairIdx, score1: pairIdx === 0 ? 1 : 0, score2: pairIdx === 0 ? 0 : 1 });
   } catch (e) {
     alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
   }
@@ -1551,21 +1848,16 @@ async function selectWinner(vd, matchIdx, pairIdx) {
 function openScoreModal(vd, matchIdx) {
   const m = vd.round.matches[matchIdx];
   editingMatchIdx = { vd, matchIdx };
-  document.getElementById('scoreModalTitle').textContent =
-    `Kenttä ${matchIdx + 1}${vd.isCurrent ? '' : ' (mennyt kierros)'} — syötä pisteet`;
+  document.getElementById('scoreModalTitle').textContent = `Kenttä ${matchIdx + 1}${vd.isCurrent ? '' : ' (mennyt)'}`;
   document.getElementById('scorePair1Label').textContent = m.p1.map(i => state.players[i].name).join(' + ');
   document.getElementById('scorePair2Label').textContent = m.p2.map(i => state.players[i].name).join(' + ');
   document.getElementById('score1Input').value = typeof m.score1 === 'number' ? m.score1 : '';
   document.getElementById('score2Input').value = typeof m.score2 === 'number' ? m.score2 : '';
-
   const targetEl = document.getElementById('scoreModalTarget');
   if (state.scoringMode === 'score' && state.winningScore > 0) {
-    targetEl.textContent = `Voittopistemäärä tilastoon: ${state.winningScore} pistettä`;
+    targetEl.textContent = `Voittopistemäärä tilastoon: ${state.winningScore}`;
     targetEl.classList.remove('hidden');
-  } else {
-    targetEl.classList.add('hidden');
-  }
-
+  } else targetEl.classList.add('hidden');
   document.getElementById('scoreError').textContent = '';
   document.getElementById('scoreModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('score1Input').focus(), 100);
@@ -1579,31 +1871,17 @@ async function saveScoreModal() {
   const s1 = parseInt(document.getElementById('score1Input').value, 10);
   const s2 = parseInt(document.getElementById('score2Input').value, 10);
   const errEl = document.getElementById('scoreError');
-  if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) { errEl.textContent = 'Anna kelvolliset pisteet molemmille.'; return; }
+  if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) { errEl.textContent = 'Anna kelvolliset pisteet.'; return; }
+  if (Date.now() < scoreLockUntil) return;
+  scoreLockUntil = Date.now() + 250;
   const { vd, matchIdx } = editingMatchIdx;
   const p = matchPath(vd, matchIdx);
   try {
-    // AUDIT-FIX: tasapeli sallittu (s1 === s2 → winner = 2)
-    if (s1 === s2) {
-      await update(ref(db, p), { winner: 2, score1: s1, score2: s2 });
-    } else {
-      await update(ref(db, p), { winner: s1 > s2 ? 0 : 1, score1: s1, score2: s2 });
-    }
+    if (s1 === s2) await update(ref(db, p), { winner: 2, score1: s1, score2: s2 });
+    else await update(ref(db, p), { winner: s1 > s2 ? 0 : 1, score1: s1, score2: s2 });
     closeScoreModal();
   } catch (e) {
     errEl.textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
-  }
-}
-// AUDIT-FIX: tyhjennä tulos
-async function clearScoreModal() {
-  if (!editingMatchIdx) return;
-  const { vd, matchIdx } = editingMatchIdx;
-  const p = matchPath(vd, matchIdx);
-  try {
-    await update(ref(db, p), { winner: null, score1: null, score2: null });
-    closeScoreModal();
-  } catch (e) {
-    document.getElementById('scoreError').textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
   }
 }
 
@@ -1614,10 +1892,7 @@ function openPairingEditor() {
   const round = state.currentRound;
   if (!round) return;
   pairingEditorState = {
-    matches: round.matches.map(m => ({
-      p1: [...m.p1], p2: [...m.p2],
-      winner: m.winner, score1: m.score1, score2: m.score2,
-    })),
+    matches: round.matches.map(m => ({ p1: [...m.p1], p2: [...m.p2], winner: m.winner, score1: m.score1, score2: m.score2 })),
     sitOuts: [...(round.sitOuts || [])],
     selected: null,
     originalMatches: round.matches.map(m => ({ p1: [...m.p1], p2: [...m.p2] })),
@@ -1626,143 +1901,80 @@ function openPairingEditor() {
   renderPairingEditor();
   document.getElementById('pairingEditorModal').classList.remove('hidden');
 }
-
 function closePairingEditor() {
   document.getElementById('pairingEditorModal').classList.add('hidden');
   pairingEditorState = null;
 }
-
 function samePos(a, b) {
   if (!a || !b) return false;
   if (a.type !== b.type) return false;
-  if (a.type === 'court') {
-    return a.courtIdx === b.courtIdx && a.pair === b.pair && a.slot === b.slot;
-  }
+  if (a.type === 'court') return a.courtIdx === b.courtIdx && a.pair === b.pair && a.slot === b.slot;
   return a.sitoutIdx === b.sitoutIdx;
 }
-
 function renderPairingEditor() {
   const container = document.getElementById('pairingEditorContent');
   if (!pairingEditorState) { container.innerHTML = ''; return; }
-
   let html = '';
   pairingEditorState.matches.forEach((m, ci) => {
     html += `<div class="pe-court"><div class="pe-court-label">Kenttä ${ci + 1}</div>`;
     html += `<div class="pe-pair-row">`;
-    m.p1.forEach((pi, slot) => {
-      html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 0, slot }, pi);
-    });
-    html += `</div>`;
-    html += `<div class="pe-pair-row">`;
-    m.p2.forEach((pi, slot) => {
-      html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 1, slot }, pi);
-    });
-    html += `</div>`;
-    html += `</div>`;
+    m.p1.forEach((pi, slot) => { html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 0, slot }, pi); });
+    html += `</div><div class="pe-pair-row">`;
+    m.p2.forEach((pi, slot) => { html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 1, slot }, pi); });
+    html += `</div></div>`;
   });
-
   if (pairingEditorState.sitOuts.length) {
     html += `<div class="pe-sitout-section"><div class="pe-court-label">Tauolla</div><div class="pe-sitout-list">`;
-    pairingEditorState.sitOuts.forEach((pi, si) => {
-      html += renderPePlayer({ type: 'sitout', sitoutIdx: si }, pi);
-    });
+    pairingEditorState.sitOuts.forEach((pi, si) => { html += renderPePlayer({ type: 'sitout', sitoutIdx: si }, pi); });
     html += `</div></div>`;
   }
-
   container.innerHTML = html;
 }
-
 function renderPePlayer(pos, playerIdx) {
   const isSel = pairingEditorState.selected && samePos(pairingEditorState.selected, pos);
   return `<button type="button" class="pe-player${isSel ? ' pe-selected' : ''}" data-pos='${JSON.stringify(pos).replace(/'/g, "&#39;")}'>${esc(state.players[playerIdx].name)}</button>`;
 }
-
 function getPlayerAtPos(pos) {
-  if (pos.type === 'court') {
-    const pair = pos.pair === 0 ? 'p1' : 'p2';
-    return pairingEditorState.matches[pos.courtIdx][pair][pos.slot];
-  }
+  if (pos.type === 'court') return pairingEditorState.matches[pos.courtIdx][pos.pair === 0 ? 'p1' : 'p2'][pos.slot];
   return pairingEditorState.sitOuts[pos.sitoutIdx];
 }
-
 function setPlayerAtPos(pos, playerIdx) {
-  if (pos.type === 'court') {
-    const pair = pos.pair === 0 ? 'p1' : 'p2';
-    pairingEditorState.matches[pos.courtIdx][pair][pos.slot] = playerIdx;
-  } else {
-    pairingEditorState.sitOuts[pos.sitoutIdx] = playerIdx;
-  }
+  if (pos.type === 'court') pairingEditorState.matches[pos.courtIdx][pos.pair === 0 ? 'p1' : 'p2'][pos.slot] = playerIdx;
+  else pairingEditorState.sitOuts[pos.sitoutIdx] = playerIdx;
 }
-
 function swapPairingEditorPlayers(a, b) {
-  const pa = getPlayerAtPos(a);
-  const pb = getPlayerAtPos(b);
-  setPlayerAtPos(a, pb);
-  setPlayerAtPos(b, pa);
+  const pa = getPlayerAtPos(a); const pb = getPlayerAtPos(b);
+  setPlayerAtPos(a, pb); setPlayerAtPos(b, pa);
 }
-
 function handlePairingEditorClick(e) {
   const btn = e.target.closest('.pe-player');
   if (!btn || !pairingEditorState) return;
   let pos;
   try { pos = JSON.parse(btn.dataset.pos); } catch { return; }
-
-  if (!pairingEditorState.selected) {
-    pairingEditorState.selected = pos;
-    renderPairingEditor();
-  } else if (samePos(pairingEditorState.selected, pos)) {
-    pairingEditorState.selected = null;
-    renderPairingEditor();
-  } else {
-    swapPairingEditorPlayers(pairingEditorState.selected, pos);
-    pairingEditorState.selected = null;
-    renderPairingEditor();
-  }
+  if (!pairingEditorState.selected) { pairingEditorState.selected = pos; renderPairingEditor(); }
+  else if (samePos(pairingEditorState.selected, pos)) { pairingEditorState.selected = null; renderPairingEditor(); }
+  else { swapPairingEditorPlayers(pairingEditorState.selected, pos); pairingEditorState.selected = null; renderPairingEditor(); }
 }
-
 async function savePairingEditor() {
   if (!pairingEditorState) return;
   const { matches, sitOuts, originalMatches, originalSitOuts } = pairingEditorState;
-
   const updates = [];
   for (let i = 0; i < matches.length; i++) {
-    const orig = originalMatches[i];
-    const cur = matches[i];
-    const p1Changed = !setsEqual(orig.p1, cur.p1);
-    const p2Changed = !setsEqual(orig.p2, cur.p2);
-    if (p1Changed || p2Changed) {
-      updates.push({ i, p1: cur.p1, p2: cur.p2 });
-    }
+    const orig = originalMatches[i]; const cur = matches[i];
+    if (!setsEqual(orig.p1, cur.p1) || !setsEqual(orig.p2, cur.p2)) updates.push({ i, p1: cur.p1, p2: cur.p2 });
   }
   const sitOutsChanged = !setsEqual(sitOuts, originalSitOuts);
-
-  if (updates.length === 0 && !sitOutsChanged) {
-    closePairingEditor();
-    return;
-  }
-
-  // AUDIT-FIX: tasapeli lasketaan tulokseksi
+  if (updates.length === 0 && !sitOutsChanged) { closePairingEditor(); return; }
   const hasResults = updates.some(u => {
     const m = matches[u.i];
     return m.winner === 0 || m.winner === 1 || m.winner === 2;
   });
-  if (hasResults) {
-    if (!confirm('Muutettuihin kenttiin on kirjattu tuloksia. Tulokset poistetaan. Jatketaanko?')) return;
-  }
-
+  if (hasResults && !confirm('Muutettuihin kenttiin on kirjattu tuloksia. Tulokset poistetaan. Jatketaanko?')) return;
   showLoading('Tallennetaan...');
   try {
-    for (const u of updates) {
-      await set(ref(db, `events/${eventCode}/state/currentRound/matches/${u.i}`), {
-        p1: u.p1,
-        p2: u.p2,
-      });
-    }
-    if (sitOutsChanged) {
-      await set(ref(db, `events/${eventCode}/state/currentRound/sitOuts`), sitOuts);
-    }
-    hideLoading();
-    closePairingEditor();
+    for (const u of updates) await set(ref(db, `events/${eventCode}/state/currentRound/matches/${u.i}`), { p1: u.p1, p2: u.p2 });
+    if (sitOutsChanged) await set(ref(db, `events/${eventCode}/state/currentRound/sitOuts`), sitOuts);
+    hideLoading(); closePairingEditor();
   } catch (e) {
     hideLoading();
     alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
@@ -1770,21 +1982,17 @@ async function savePairingEditor() {
 }
 
 // ============================================================
-// Kierroksen kulku
+// Kierroksen vaihto
 // ============================================================
 async function nextRound() {
-  if ((state.pairingType || 'mexicano') === 'americano') {
-    if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
-      await loadAmericanoSchedules(true); // AUDIT-FIX: forceRetry
-    }
+  if ((state.pairingType || 'mexicano') === 'americano' && Object.keys(AMERICANO_SCHEDULES).length === 0) {
+    await loadAmericanoSchedules(true);
   }
   const stateRef = ref(db, `events/${eventCode}/state`);
   try {
     await runTransaction(stateRef, (current) => {
       if (!current || !current.currentRound) return current;
-      // AUDIT-FIX: tasapeli lasketaan tulokseksi
       if (!current.currentRound.matches.every(m => m.winner === 0 || m.winner === 1 || m.winner === 2)) return current;
-      
       const lastSitOuts = current.currentRound.sitOuts || [];
       const allRounds = [...(current.rounds || []), current.currentRound];
       const gen = generateRoundForState({
@@ -1811,9 +2019,7 @@ async function nextRound() {
         newState.americanoMapping = gen.americanoMapping;
         newState.americanoBlock = gen.americanoBlock;
       }
-      if (gen.kocInitialOrder !== undefined) {
-        newState.kocInitialOrder = gen.kocInitialOrder;
-      }
+      if (gen.kocInitialOrder !== undefined) newState.kocInitialOrder = gen.kocInitialOrder;
       return newState;
     });
     state.viewIdx = null;
@@ -1825,68 +2031,48 @@ async function nextRound() {
 }
 
 // ============================================================
-// Tulokset
+// Tulokset – korttilista
 // ============================================================
 function renderResultsQr() {
   const container = document.getElementById('resultsQr');
   if (!container || !eventCode) return;
   const url = `${location.origin}${location.pathname}?event=${eventCode}`;
-  if (typeof qrcode !== 'function') {
-    container.innerHTML = '';
-    return;
-  }
+  if (typeof qrcode !== 'function') { container.innerHTML = ''; return; }
   try {
     const qr = qrcode(0, 'L');
-    qr.addData(url);
-    qr.make();
+    qr.addData(url); qr.make();
     container.innerHTML = qr.createImgTag(3, 0);
-  } catch (e) {
-    container.innerHTML = '';
-  }
+  } catch (e) { container.innerHTML = ''; }
 }
 
 function renderResults() {
   const stats = computeStats();
   const rows = state.players.map((p, i) => ({ name: p.name, ...stats[i] }));
-  rows.forEach(r => {
-    r.saldo = r.games > 0 ? (r.points / r.games) * 10 : 0;
-  });
-  // AUDIT-FIX: viimeinen tasapeliehto: enemmän pelejä pelannut sijoittuu korkeammalle
+  rows.forEach(r => { r.saldo = r.games > 0 ? (r.points / r.games) * 10 : 0; });
   rows.sort((a, b) => {
     if (b.saldo !== a.saldo) return b.saldo - a.saldo;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.games - a.games;
   });
   const topSaldo = rows.length ? rows[0].saldo : 0;
-  document.getElementById('resultsTable').innerHTML = `
-    <thead>
-      <tr>
-        <th>Nimi</th>
-        <th class="num">Saldo</th>
-        <th class="num">Pisteet</th>
-        <th class="num">Voitot</th>
-        <th class="num">Pelit</th>
-        <th class="num">Tauot</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows.map(r => `
-        <tr${r.saldo === topSaldo && topSaldo > 0 ? ' class="rank-1"' : ''}>
-          <td class="name-cell">${esc(r.name)}</td>
-          <td class="num">${r.saldo.toFixed(1)}</td>
-          <td class="num">${r.points}</td>
-          <td class="num">${r.wins}</td>
-          <td class="num">${r.games}</td>
-          <td class="num">${r.sitOuts}</td>
-        </tr>
-      `).join('')}
-    </tbody>
-  `;
+  document.getElementById('resultsList').innerHTML = rows.map((r, idx) => {
+    const isRank1 = r.saldo === topSaldo && topSaldo > 0;
+    return `
+      <div class="result-card${isRank1 ? ' rank-1' : ''}">
+        <div class="result-rank">${idx + 1}</div>
+        <div class="result-main">
+          <div class="result-name">${esc(r.name)}</div>
+          <div class="result-stats">${r.points} p · ${r.wins} V · ${r.games} P · ${r.sitOuts} T</div>
+        </div>
+        <div class="result-saldo">${r.saldo.toFixed(1)}</div>
+      </div>
+    `;
+  }).join('');
   renderResultsQr();
 }
 
 // ============================================================
-// Kierroshistoria
+// Historia – pystylista
 // ============================================================
 function getAllRounds() {
   const all = [...state.rounds];
@@ -1894,17 +2080,16 @@ function getAllRounds() {
   return all;
 }
 
-// AUDIT-FIX: tasapeli näytetään selkeästi
-function formatPairs(m) {
+function formatMatchText(m) {
   const p1 = m.p1.map(i => state.players[i].name).join(' + ');
   const p2 = m.p2.map(i => state.players[i].name).join(' + ');
   if (m.winner === 0) return `<b>${esc(p1)}</b> vs ${esc(p2)}`;
   if (m.winner === 1) return `${esc(p1)} vs <b>${esc(p2)}</b>`;
-  if (m.winner === 2) return `${esc(p1)} vs ${esc(p2)} (tasan)`;
+  if (m.winner === 2) return `${esc(p1)} vs ${esc(p2)} <span style="color:var(--tie-fg)">(tasan)</span>`;
   return `${esc(p1)} vs ${esc(p2)}`;
 }
 
-function formatScore(m) {
+function formatScoreText(m) {
   if (m.winner !== 0 && m.winner !== 1 && m.winner !== 2) return '—';
   if (m.winner === 2) {
     if (state.scoringMode === 'win') return 'Tasan';
@@ -1914,128 +2099,63 @@ function formatScore(m) {
   }
   const s1 = typeof m.score1 === 'number' ? m.score1 : '?';
   const s2 = typeof m.score2 === 'number' ? m.score2 : '?';
-  const actual = `${s1}–${s2}`;
-  if (state.scoringMode === 'score' && state.winningScore > 0 &&
-      typeof m.score1 === 'number' && typeof m.score2 === 'number') {
-    const sp = calcStatPoints(m, state.winningScore, state.scoringMode);
-    if (sp.p1 !== m.score1 || sp.p2 !== m.score2) {
-      return `${actual} <span class="stat-points">(${sp.p1}–${sp.p2})</span>`;
-    }
-  }
-  return actual;
+  return `${s1}–${s2}`;
 }
 
 function renderHistoryScreen() {
   const filterSelect = document.getElementById('historyFilter');
   const currentVal = filterSelect.value;
-  filterSelect.innerHTML = '<option value="">Kaikki pelaajat</option>' +
+  filterSelect.innerHTML = '<option value="">Kaikki</option>' +
     state.players.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
   if (state.players.some(p => p.name === currentVal)) filterSelect.value = currentVal;
-  renderHistoryTable();
+  renderHistoryList();
 }
 
-function renderHistoryTable() {
+function renderHistoryList() {
   const filterName = document.getElementById('historyFilter').value;
-  const table = document.getElementById('historyTable');
-
-  if (!state.players.length) {
-    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia</td></tr></tbody>';
-    return;
-  }
-
+  const list = document.getElementById('historyList');
+  if (!state.players.length) { list.innerHTML = '<div class="history-empty">Ei pelaajia</div>'; return; }
   const all = getAllRounds();
-  if (all.length === 0) {
-    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia vielä</td></tr></tbody>';
-    return;
-  }
+  if (all.length === 0) { list.innerHTML = '<div class="history-empty">Ei kierroksia vielä</div>'; return; }
 
-  const rows = [];
-
+  let html = '';
   for (let i = all.length - 1; i >= 0; i--) {
     const round = all[i];
     const roundNum = i + 1;
     const sitoutNames = round.sitOuts.map(idx => state.players[idx].name);
     const sitoutStr = sitoutNames.length > 0 ? sitoutNames.map(esc).join(', ') : '—';
 
-    if (!filterName) {
-      round.matches.forEach((m, mi) => {
-        rows.push({
-          roundNum, court: mi + 1,
-          pairs: formatPairs(m),
-          score: formatScore(m),
-          sitouts: sitoutStr,
-          isSitout: false,
-          isFirstInRound: mi === 0,
-          roundRowCount: round.matches.length,
-        });
-      });
-    } else {
-      const playerMatches = round.matches.filter(m => {
+    let matches = round.matches;
+    let playerIsSitout = false;
+    if (filterName) {
+      matches = round.matches.filter(m => {
         const names = [...m.p1, ...m.p2].map(idx => state.players[idx].name);
         return names.includes(filterName);
       });
-      if (playerMatches.length > 0) {
-        playerMatches.forEach((m, mi) => {
-          const courtIdx = round.matches.indexOf(m) + 1;
-          rows.push({
-            roundNum, court: courtIdx,
-            pairs: formatPairs(m),
-            score: formatScore(m),
-            sitouts: sitoutStr,
-            isSitout: false,
-            isFirstInRound: mi === 0,
-            roundRowCount: playerMatches.length,
-          });
-        });
-      } else if (sitoutNames.includes(filterName)) {
-        rows.push({
-          roundNum, court: null,
-          pairs: '—',
-          score: '—',
-          sitouts: sitoutStr,
-          isSitout: true,
-          isFirstInRound: true,
-          roundRowCount: 1,
-        });
-      }
+      if (matches.length === 0 && sitoutNames.includes(filterName)) playerIsSitout = true;
+      if (matches.length === 0 && !playerIsSitout) continue;
     }
+
+    html += `<div class="history-round">`;
+    html += `<div class="history-round-header"><span>Kierros ${roundNum}</span>`;
+    if (sitoutNames.length > 0) html += `<span class="history-round-sitouts">Tauko: ${sitoutStr}</span>`;
+    html += `</div>`;
+    if (playerIsSitout) {
+      html += `<div class="history-match"><span class="history-court">—</span><span class="history-pairs"><span class="history-sitout-badge">Tauko</span></span><span class="history-score">—</span></div>`;
+    } else {
+      matches.forEach((m) => {
+        const courtIdx = round.matches.indexOf(m) + 1;
+        html += `<div class="history-match">`;
+        html += `<span class="history-court">K${courtIdx}</span>`;
+        html += `<span class="history-pairs">${formatMatchText(m)}</span>`;
+        html += `<span class="history-score">${formatScoreText(m)}</span>`;
+        html += `</div>`;
+      });
+    }
+    html += `</div>`;
   }
-
-  if (rows.length === 0) {
-    table.innerHTML = '<tbody><tr><td class="history-empty">Ei kierroksia valitulle pelaajalle</td></tr></tbody>';
-    return;
-  }
-
-  let html = `<thead>
-    <tr>
-      <th class="num">Kierros</th>
-      <th class="num">Kenttä</th>
-      <th>Peliparit</th>
-      <th class="num">Tulos</th>
-      <th>Taukoilijat</th>
-    </tr>
-  </thead><tbody>`;
-
-  rows.forEach(r => {
-    const trClass = r.isSitout ? ' class="sitout-row"' : '';
-    const courtCell = r.isSitout
-      ? '<span class="sitout-cell">Tauko</span>'
-      : `K${r.court}`;
-    html += `<tr${trClass}>`;
-    if (r.isFirstInRound) {
-      html += `<td class="num" rowspan="${r.roundRowCount}">${r.roundNum}</td>`;
-    }
-    html += `<td class="num">${courtCell}</td>`;
-    html += `<td>${r.pairs}</td>`;
-    html += `<td class="num">${r.score}</td>`;
-    if (r.isFirstInRound) {
-      html += `<td rowspan="${r.roundRowCount}">${r.sitouts}</td>`;
-    }
-    html += `</tr>`;
-  });
-
-  html += '</tbody>';
-  table.innerHTML = html;
+  if (!html) html = '<div class="history-empty">Ei kierroksia valitulle pelaajalle</div>';
+  list.innerHTML = html;
 }
 
 // ============================================================
@@ -2048,15 +2168,14 @@ function openShareModal() {
   document.getElementById('shareUrl').textContent = url;
   const container = document.getElementById('qrContainer');
   if (typeof qrcode !== 'function') {
-    container.innerHTML = '<div style="color:#999;font-size:0.85em">QR-kirjasto ei latautunut</div>';
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem">QR-kirjasto ei latautunut</div>';
   } else {
     try {
       const qr = qrcode(0, 'M');
-      qr.addData(url);
-      qr.make();
-      container.innerHTML = qr.createImgTag(6, 8);
+      qr.addData(url); qr.make();
+      container.innerHTML = `<div style="display:inline-block;background:white;padding:8px;border-radius:8px">${qr.createImgTag(6, 0)}</div>`;
     } catch (e) {
-      container.innerHTML = '<div style="color:#999;font-size:0.85em">QR-koodin luonti epäonnistui</div>';
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem">QR-koodin luonti epäonnistui</div>';
     }
   }
   document.getElementById('shareModal').classList.remove('hidden');
@@ -2074,8 +2193,32 @@ async function copyShareLink() {
 }
 
 // ============================================================
+// ⋯-valikko
+// ============================================================
+function openAppMenu(fromLanding = false) {
+  const eventSection = document.getElementById('appMenuEventSection');
+  const exitSection = document.getElementById('appMenuExitSection');
+  const uiTitle = document.getElementById('appMenuUiTitle');
+  if (fromLanding || !eventCode) {
+    eventSection.classList.add('hidden');
+    exitSection.classList.add('hidden');
+    uiTitle.style.display = '';
+  } else {
+    eventSection.classList.remove('hidden');
+    exitSection.classList.remove('hidden');
+    uiTitle.style.display = 'none';
+    const pairingBtn = document.getElementById('menuPairingEditor');
+    const vd = getViewData();
+    if (vd.isCurrent && vd.round) pairingBtn.classList.remove('hidden');
+    else pairingBtn.classList.add('hidden');
+  }
+  renderUiControls('appMenuUiControls');
+  document.getElementById('appMenuModal').classList.remove('hidden');
+}
+function closeAppMenu() { document.getElementById('appMenuModal').classList.add('hidden'); }
+
+// ============================================================
 // Sovelluksen päivitys
-// AUDIT-FIX: tyhjennetään vain mexicano_*-avaimet, ei koko origin-tallennusta
 // ============================================================
 async function updateApp() {
   const warning =
@@ -2084,17 +2227,12 @@ async function updateApp() {
     '  • Tyhjentää tämän sovelluksen paikalliset tiedot (mexicano_*)\n' +
     '  • Poistaa "Omat tapahtumat" -listan\n' +
     '  • Hakee palvelimelta uusimman sovelluskoodin\n\n' +
-    'Tapahtumat säilyvät palvelimella (Firebase), mutta tämä selain ' +
-    'ei enää muista niitä automaattisesti. Voit liittyä tapahtumaan ' +
-    'uudelleen sen 5-kirjaimisella koodilla.\n\n' +
-    'Haluatko varmasti jatkaa päivitykseen?';
+    'Tapahtumat säilyvät palvelimella. Voit liittyä uudelleen koodilla.\n\n' +
+    'Jatketaanko?';
 
   if (!confirm(warning)) return;
-
-  showLoading('Tyhjennetään selaintietoja ja haetaan uusinta versiota...');
-
+  showLoading('Tyhjennetään ja haetaan uusinta versiota...');
   try {
-    // AUDIT-FIX: vain mexicano_*-avaimet
     try {
       const toRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -2102,8 +2240,7 @@ async function updateApp() {
         if (k && k.startsWith('mexicano_')) toRemove.push(k);
       }
       toRemove.forEach(k => localStorage.removeItem(k));
-    } catch (e) { console.warn('localStorage clear failed', e); }
-
+    } catch (e) {}
     try {
       const toRemove = [];
       for (let i = 0; i < sessionStorage.length; i++) {
@@ -2111,16 +2248,13 @@ async function updateApp() {
         if (k && k.startsWith('mexicano_')) toRemove.push(k);
       }
       toRemove.forEach(k => sessionStorage.removeItem(k));
-    } catch (e) { console.warn('sessionStorage clear failed', e); }
-
-    // Service worker -rekisteröinnit (jos niitä on)
+    } catch (e) {}
     if ('serviceWorker' in navigator) {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
         await Promise.all(regs.map(r => r.unregister()));
-      } catch (e) { console.warn('Service worker unregister failed', e); }
+      } catch (e) {}
     }
-
     const url = new URL(location.href);
     url.search = '';
     url.searchParams.set('v', Date.now().toString());
@@ -2135,15 +2269,22 @@ async function updateApp() {
 // Tapahtumien kytkennät
 // ============================================================
 document.getElementById('createEventBtn').addEventListener('click', createNewEvent);
-document.getElementById('joinEventBtn').addEventListener('click', () => {
-  joinExistingEvent(document.getElementById('joinCodeInput').value);
-});
-document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinExistingEvent(e.target.value);
-});
+
 document.getElementById('joinCodeInput').addEventListener('input', (e) => {
   e.target.value = e.target.value.toUpperCase().replace(/[^23456789ABCDEFGHJKLMNPQRSTUVWXYZ]/g, '');
+  if (joinTimer) clearTimeout(joinTimer);
+  if (e.target.value.length === 5 && isValidCode(e.target.value)) {
+    joinTimer = setTimeout(() => { joinExistingEvent(e.target.value); }, 500);
+  }
 });
+document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; }
+    joinExistingEvent(e.target.value);
+  }
+});
+
+document.getElementById('landingSettingsBtn').addEventListener('click', () => openAppMenu(true));
 
 document.getElementById('playersInput').addEventListener('input', updateSetupHelpers);
 document.getElementById('courtsInput').addEventListener('input', () => {
@@ -2160,8 +2301,14 @@ document.querySelectorAll('input[name="scoringMode"]').forEach(r => {
   r.addEventListener('change', updateWinningScoreVisibility);
 });
 
-document.getElementById('startBtn').addEventListener('click', applySettings);
+document.getElementById('useLastPlayersBtn').addEventListener('click', () => {
+  const lastPlayers = getLastPlayers();
+  if (!lastPlayers) return;
+  document.getElementById('playersInput').value = lastPlayers.join('\n');
+  updateSetupHelpers();
+});
 
+document.getElementById('startBtn').addEventListener('click', applySettings);
 document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
   editingStartedMidEvent = false;
   showScreen('main');
@@ -2180,40 +2327,29 @@ document.getElementById('nextRoundBtn').addEventListener('click', () => {
   else { state.viewIdx = null; renderMain(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 });
 
-document.getElementById('shareBtn').addEventListener('click', openShareModal);
-document.getElementById('settingsBtn').addEventListener('click', () => {
-  showScreen('setup');
-  renderSetup();
-});
 document.getElementById('resultsBtn').addEventListener('click', () => {
-  renderResults();
-  showScreen('results');
+  renderResults(); showScreen('results');
 });
+document.getElementById('menuBtn').addEventListener('click', () => openAppMenu(false));
+
 document.getElementById('backFromResultsBtn').addEventListener('click', () => {
-  showScreen('main');
-  renderMain();
+  showScreen('main'); renderMain();
 });
 document.getElementById('resultsQrBtn').addEventListener('click', openShareModal);
-
 document.getElementById('historyBtn').addEventListener('click', () => {
-  renderHistoryScreen();
-  showScreen('history');
+  renderHistoryScreen(); showScreen('history');
 });
 document.getElementById('backFromHistoryBtn').addEventListener('click', () => {
-  showScreen('results');
-  renderResults();
+  showScreen('results'); renderResults();
 });
-document.getElementById('historyFilter').addEventListener('change', renderHistoryTable);
+document.getElementById('historyFilter').addEventListener('change', renderHistoryList);
 
 document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
 document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
-// AUDIT-FIX: tyhjennä-nappi
-document.getElementById('scoreClearBtn').addEventListener('click', clearScoreModal);
 document.getElementById('scoreModal').addEventListener('click', (e) => {
   if (e.target.id === 'scoreModal') closeScoreModal();
 });
 
-document.getElementById('editPairingBtn').addEventListener('click', openPairingEditor);
 document.getElementById('pairingEditorCancelBtn').addEventListener('click', closePairingEditor);
 document.getElementById('pairingEditorSaveBtn').addEventListener('click', savePairingEditor);
 document.getElementById('pairingEditorContent').addEventListener('click', handlePairingEditorClick);
@@ -2227,12 +2363,21 @@ document.getElementById('shareModal').addEventListener('click', (e) => {
   if (e.target.id === 'shareModal') closeShareModal();
 });
 
-// Versiolinkki (kaikki data-version-link -elementit)
+document.getElementById('appMenuCloseBtn').addEventListener('click', closeAppMenu);
+document.getElementById('appMenuModal').addEventListener('click', (e) => {
+  if (e.target.id === 'appMenuModal') closeAppMenu();
+});
+document.getElementById('menuShare').addEventListener('click', () => { closeAppMenu(); setTimeout(openShareModal, 100); });
+document.getElementById('menuResults').addEventListener('click', () => { closeAppMenu(); renderResults(); showScreen('results'); });
+document.getElementById('menuPairingEditor').addEventListener('click', () => { closeAppMenu(); setTimeout(openPairingEditor, 100); });
+document.getElementById('menuEditSettings').addEventListener('click', () => { closeAppMenu(); setTimeout(() => { showScreen('setup'); renderSetup(); }, 100); });
+document.getElementById('menuExit').addEventListener('click', () => {
+  closeAppMenu();
+  setTimeout(() => { if (confirm('Poistutaanko tapahtumasta? Voit liittyä takaisin koodilla ' + eventCode + '.')) exitEvent(); }, 100);
+});
+
 document.querySelectorAll('[data-version-link]').forEach(el => {
-  el.addEventListener('click', (e) => {
-    e.preventDefault();
-    updateApp();
-  });
+  el.addEventListener('click', (e) => { e.preventDefault(); updateApp(); });
 });
 
 window.addEventListener('popstate', () => {
@@ -2244,19 +2389,21 @@ window.addEventListener('popstate', () => {
     showScreen('none');
     state.screen = 'initializing';
     attachEventListener();
-  } else if (!code && eventCode) {
-    exitEvent();
-  }
+  } else if (!code && eventCode) exitEvent();
 });
+
+// Päivitä meta theme-color kun käyttöjärjestelmän teema vaihtuu
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeColorMeta);
+}
 
 // ============================================================
 // Käynnistys
 // ============================================================
 (function init() {
-  // Lataa Americano-taulukot taustalla
   loadAmericanoSchedules();
+  updateThemeColorMeta();
 
-  // Päivitä versiolinkkien teksti dynaamisesti
   document.querySelectorAll('[data-version-link]').forEach(el => {
     el.textContent = 'Versio ' + APP_VERSION;
   });
@@ -2271,9 +2418,7 @@ window.addEventListener('popstate', () => {
       state.screen = 'initializing';
       attachEventListener();
       return;
-    } else {
-      history.replaceState({}, '', location.pathname);
-    }
+    } else history.replaceState({}, '', location.pathname);
   }
   state.screen = 'landing';
   showScreen('landing');
