@@ -1,14 +1,14 @@
 <!--
   ============================================================
   Mexicano / Americano / King of the Court
-  Versio: 1.7.0
+  Versio: 1.8.0
   Päivitetty: 2026-11-06
   ============================================================
   Yksisivuinen tennis-/padel-sovellus kolmella paritustyypillä:
     - Mexicano (pisteiden mukainen paritus)
     - Americano (kiinteä kaavio americano.txt:stä)
     - King of the Court (voittajat nousevat, häviäjät laskevat)
-  Pistelasku: pelkkä voitto tai pisteiden syöttö
+  Pistelasku: pelkkä voitto tai pisteiden syöttö, tasapelit tuettu
   Tapahtumat: Firebase Realtime Database + paikallinen lista
   ============================================================
 -->
@@ -68,13 +68,17 @@
   .compact-pair.winner { background: #e5f7ea; color: #146c34; font-weight: 700; }
   .compact-pair span { display: block; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   
+  /* AUDIT-FIX: score-cell on nyt klikattava button, joka tukee myös tasapeliä */
   .compact-score { 
     display: flex; align-items: center; justify-content: center; 
     width: 70px; flex-shrink: 0; 
     padding: 0; font-weight: 700; color: #777; font-size: 1em; 
-    border-left: 1px solid #eee; border-right: 1px solid #eee; background: #fafafa; 
+    border-top: none; border-bottom: none; border-left: 1px solid #eee; border-right: 1px solid #eee;
+    border-radius: 0; background: #fafafa; 
+    font-family: inherit; cursor: pointer;
   }
   .compact-score.winner { color: #146c34; background: #e5f7ea; }
+  .compact-score.tie { color: #a86a00; background: #fff4e0; }
 
   .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e3ea; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); z-index: 20; }
   .bottom-bar .btn-primary { max-width: 600px; margin: 0 auto; display: block; }
@@ -180,7 +184,7 @@
   </div>
   <div id="landingError" class="error"></div>
   <div class="version-footer">
-    <a class="version-link" data-version-link>Versio 1.7.0</a>
+    <a class="version-link" data-version-link>Versio 1.8.0</a>
   </div>
 </div>
 
@@ -211,8 +215,8 @@
       </div>
       <div class="helper" style="margin-top:8px">
         <div id="mexicanoInfo">Mexicano: pelaajat jaetaan tasoihin pisteiden mukaan ja paritetaan taulukon mukaisesti.</div>
-        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan (americano.txt). Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen samojen erien toistumisen välttämiseksi.</div>
-        <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat.</div>
+        <div id="americanoInfo" class="hidden">Americano: käytetään kiinteää pelikaaviota pelaajamäärän mukaan (americano.txt). Kun kaavio on käyty läpi, pelaajat arvotaan uuteen järjestykseen. Huom: toistot ovat mahdollisia, erityisesti pienillä pelaajamäärillä (esim. 4 pelaajalla uniikkeja pareja on vain 6).</div>
+        <div id="kocInfo" class="hidden">King of the Court: voittajat nousevat ylemmäs ja häviäjät laskevat alemmas. Ylimmällä kentällä voittajat pysyvät, ja heidän parikseen tulee alemman kentän voittajat. <b>Vaatii vähintään 2 kenttää ja 8 pelaajaa.</b> Tauolla olevan pelaajan taso ei muutu tauon aikana.</div>
       </div>
     </div>
     <div class="card" id="mexicanoPairingCard">
@@ -243,7 +247,7 @@
     <button class="btn-primary" id="startBtn" style="margin-top:12px">Aloita</button>
     <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
     <div class="version-footer">
-      <a class="version-link" data-version-link>Versio 1.7.0</a>
+      <a class="version-link" data-version-link>Versio 1.8.0</a>
     </div>
   </div>
 </div>
@@ -328,8 +332,10 @@
       <div class="label-side" id="scorePair2Label"></div>
       <input type="number" id="score2Input" min="0" inputmode="numeric" placeholder="0">
     </div>
+    <div class="helper" style="margin-top:-4px;margin-bottom:8px;font-size:0.85em">Syötä molemmille sama pistemäärä merkitäksesi tasapelin.</div>
     <div id="scoreError" class="error"></div>
     <div class="modal-actions">
+      <button class="btn-secondary" id="scoreClearBtn">Tyhjennä</button>
       <button class="btn-secondary" id="scoreCancelBtn">Peruuta</button>
       <button class="btn-primary" id="scoreSaveBtn">Tallenna</button>
     </div>
@@ -386,13 +392,15 @@ const db = getDatabase(app);
 // ============================================================
 // Sovelluksen versio
 // ============================================================
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 // ============================================================
 // Americano-taulukot (ladataan ulkoisesta tiedostosta)
 // ============================================================
 let AMERICANO_SCHEDULES = {};
 let americanoLoadPromise = null;
+// AUDIT-FIX: seurataan latauksen epäonnistumista, jotta voidaan yrittää uudelleen
+let americanoLoadError = false;
 
 function letterToIndex(letter) {
   return letter.toUpperCase().charCodeAt(0) - 65;
@@ -445,25 +453,32 @@ function parseAmericanoTxt(text) {
   return schedules;
 }
 
-function loadAmericanoSchedules() {
-  if (americanoLoadPromise) return americanoLoadPromise;
-  americanoLoadPromise = fetch('americano.txt', { cache: 'no-cache' })
-    .then(r => {
+// AUDIT-FIX: uudelleenyritys epäonnistumisen jälkeen, forceRetry-parametri
+function loadAmericanoSchedules(forceRetry = false) {
+  if (!forceRetry && americanoLoadPromise) return americanoLoadPromise;
+
+  const loadPromise = (async () => {
+    try {
+      const r = await fetch('americano.txt', { cache: 'no-cache' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    })
-    .then(text => {
+      const text = await r.text();
       AMERICANO_SCHEDULES = parseAmericanoTxt(text);
+      americanoLoadError = false;
       const counts = Object.keys(AMERICANO_SCHEDULES).map(Number).sort((a, b) => a - b);
       console.log('Americano-taulukot ladattu pelaajamäärille:', counts.join(', '));
       return AMERICANO_SCHEDULES;
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Americano-taulukoiden lataus epäonnistui:', err);
       AMERICANO_SCHEDULES = {};
+      americanoLoadError = true;
+      // AUDIT-FIX: nollaa promise, jotta seuraava kutsu yrittää uudelleen
+      if (americanoLoadPromise === loadPromise) americanoLoadPromise = null;
       return AMERICANO_SCHEDULES;
-    });
-  return americanoLoadPromise;
+    }
+  })();
+
+  americanoLoadPromise = loadPromise;
+  return loadPromise;
 }
 
 // ============================================================
@@ -488,6 +503,8 @@ let state = {
   tiebreakOrder: [],
   americanoMapping: null,
   americanoBlock: 0,
+  // AUDIT-FIX: KoC:n alkuperäinen tasojärjestys satunnaistetaan ja tallennetaan
+  kocInitialOrder: null,
   viewIdx: null,
   screen: 'landing'
 };
@@ -588,8 +605,18 @@ function setsEqual(a, b) {
   return true;
 }
 
+// AUDIT-FIX: tasapelituki (winner === 2). Tasapeli:
+//   - 'win'-moodissa: 0 pistettä, 0 voittoa kummallekaan
+//   - 'score'-moodissa: molemmille oma toteutunut pistemäärä (ei normalisointia)
 function calcStatPoints(match, winningScore, scoringMode) {
-  if (match.winner !== 0 && match.winner !== 1) return { p1: 0, p2: 0 };
+  if (match.winner !== 0 && match.winner !== 1 && match.winner !== 2) return { p1: 0, p2: 0 };
+  if (match.winner === 2) {
+    if (scoringMode === 'win') return { p1: 0, p2: 0 };
+    if (typeof match.score1 === 'number' && typeof match.score2 === 'number') {
+      return { p1: match.score1, p2: match.score2 };
+    }
+    return { p1: 0, p2: 0 };
+  }
   if (scoringMode === 'win') {
     return { p1: match.winner === 0 ? 1 : 0, p2: match.winner === 1 ? 1 : 0 };
   }
@@ -682,6 +709,14 @@ async function joinExistingEvent(code) {
   try {
     const snap = await get(ref(db, `events/${code}`));
     if (!snap.exists()) { hideLoading(); setLandingError('Tapahtumaa ei löytynyt koodilla ' + code + '.'); return; }
+    // AUDIT-FIX: lisää liittynyt tapahtuma "Omat tapahtumat" -listaan
+    const data = snap.val();
+    const s = data.state;
+    addMyEvent(code, {
+      started: !!(s && s.currentRound),
+      playerCount: s ? (s.players || []).length : 0,
+      roundCount: s ? (s.rounds || []).length + (s.currentRound ? 1 : 0) : 0,
+    });
     navigateToEvent(code);
   } catch (e) {
     hideLoading();
@@ -709,6 +744,7 @@ function exitEvent() {
   state.players = []; state.rounds = []; state.currentRound = null;
   state.tiebreakOrder = []; state.viewIdx = null;
   state.americanoMapping = null; state.americanoBlock = 0;
+  state.kocInitialOrder = null;
   state.screen = 'landing';
   showScreen('landing');
   setLandingError('');
@@ -743,6 +779,7 @@ function attachEventListener() {
         state.tiebreakOrder = s.tiebreakOrder || [];
         state.americanoMapping = s.americanoMapping || null;
         state.americanoBlock = typeof s.americanoBlock === 'number' ? s.americanoBlock : 0;
+        state.kocInitialOrder = s.kocInitialOrder || null;
       }
       if (state.viewIdx !== null && state.viewIdx >= state.rounds.length) {
         state.viewIdx = null;
@@ -838,9 +875,22 @@ function generateAmericanoRound(st, existingRounds) {
 }
 
 // ----- KoC -----
-function computeKocLevels(playerCount, rounds, courts) {
-  let levels = Array.from({ length: playerCount }, (_, i) =>
-    Math.min(courts, Math.floor(i / 4) + 1));
+// AUDIT-FIX: satunnaistettu alkujärjestys (kocInitialOrder).
+// Tasot lasketaan aina tästä samasta alkuasetelmasta, jotta tasot eivät "aJehdu"
+// kierrosten välillä. Tauolla olevan pelaajan taso ei muutu (dokumentoitu).
+// Tasapeli (winner === 2) ei liikuta kumpaakaan paria.
+function computeKocLevels(playerCount, rounds, courts, initialOrder) {
+  let levels;
+  if (initialOrder && initialOrder.length === playerCount) {
+    levels = new Array(playerCount);
+    for (let pos = 0; pos < playerCount; pos++) {
+      const playerIdx = initialOrder[pos];
+      levels[playerIdx] = Math.min(courts, Math.floor(pos / 4) + 1);
+    }
+  } else {
+    levels = Array.from({ length: playerCount }, (_, i) =>
+      Math.min(courts, Math.floor(i / 4) + 1));
+  }
   for (const round of rounds) {
     const newLevels = [...levels];
     for (let ci = 0; ci < round.matches.length; ci++) {
@@ -852,6 +902,7 @@ function computeKocLevels(playerCount, rounds, courts) {
         for (const idx of winPair) newLevels[idx] = Math.max(1, courtNum - 1);
         for (const idx of losePair) newLevels[idx] = Math.min(courts, courtNum + 1);
       }
+      // winner === 2 (tie): ei muutosta
     }
     levels = newLevels;
   }
@@ -876,8 +927,8 @@ function generateKocRound(st, existingRounds) {
   const courts = st.courts;
   const sitOutCount = n - courts * 4;
   if (sitOutCount < 0) return null;
-
-  const levels = computeKocLevels(n, existingRounds, courts);
+  // AUDIT-FIX: KoC vaatii vähintään 2 kenttää
+  if (courts < 2) return null;
 
   const counts = new Array(n).fill(0);
   for (const r of existingRounds) {
@@ -897,6 +948,19 @@ function generateKocRound(st, existingRounds) {
     const recent = all.filter(i => lastSit.includes(i));
     tiebreakOrder = [...others, ...recent];
   }
+
+  // AUDIT-FIX: pysyvä satunnainen alkujärjestys tasoille
+  let kocInitialOrder = st.kocInitialOrder;
+  if (!kocInitialOrder || kocInitialOrder.length !== n) {
+    kocInitialOrder = Array.from({ length: n }, (_, i) => i);
+    for (let i = kocInitialOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [kocInitialOrder[i], kocInitialOrder[j]] = [kocInitialOrder[j], kocInitialOrder[i]];
+    }
+  }
+
+  const levels = computeKocLevels(n, existingRounds, courts, kocInitialOrder);
+
   const tiePos = new Array(n);
   for (let i = 0; i < n; i++) tiePos[tiebreakOrder[i]] = i;
   const sorted = Array.from({ length: n }, (_, i) => i);
@@ -908,7 +972,8 @@ function generateKocRound(st, existingRounds) {
   const sitOutIndices = sorted.slice(0, sitOutCount);
   const playing = sorted.slice(sitOutCount);
 
-  playing.sort((a, b) => levels[a] - levels[b] || a - b);
+  // AUDIT-FIX: käytä tiePos:ia (satunnainen) indeksin sijaan tasapelien ratkaisussa
+  playing.sort((a, b) => levels[a] - levels[b] || tiePos[a] - tiePos[b]);
 
   const matches = [];
   for (let c = 0; c < courts; c++) {
@@ -927,7 +992,7 @@ function generateKocRound(st, existingRounds) {
     matches.push({ p1, p2, winner: null, score1: null, score2: null });
   }
 
-  return { sitOuts: sitOutIndices, matches, tiebreakOrder };
+  return { sitOuts: sitOutIndices, matches, tiebreakOrder, kocInitialOrder };
 }
 
 // ----- Mexicano -----
@@ -971,11 +1036,13 @@ function generateMexicanoRound(st, existingRounds) {
   const stats = st.players.map(() => ({ points: 0, wins: 0 }));
   for (const r of existingRounds) {
     for (const m of r.matches) {
-      if (m.winner === 0 || m.winner === 1) {
+      // AUDIT-FIX: tasapelit mukaan tilastoihin
+      if (m.winner === 0 || m.winner === 1 || m.winner === 2) {
         const sp = calcStatPoints(m, st.winningScore || 0, st.scoringMode || 'win');
         for (const i of m.p1) stats[i].points += sp.p1;
         for (const i of m.p2) stats[i].points += sp.p2;
-        for (const i of (m.winner === 0 ? m.p1 : m.p2)) stats[i].wins++;
+        if (m.winner === 0) for (const i of m.p1) stats[i].wins++;
+        else if (m.winner === 1) for (const i of m.p2) stats[i].wins++;
       }
     }
   }
@@ -1006,9 +1073,10 @@ function computeStats() {
     for (const idx of round.sitOuts) stats[idx].sitOuts++;
     for (const m of round.matches) {
       for (const idx of [...m.p1, ...m.p2]) stats[idx].games++;
-      if (m.winner === 0 || m.winner === 1) {
-        const wp = m.winner === 0 ? m.p1 : m.p2;
-        for (const idx of wp) stats[idx].wins++;
+      // AUDIT-FIX: tasapelit mukaan pisteisiin
+      if (m.winner === 0 || m.winner === 1 || m.winner === 2) {
+        if (m.winner === 0) for (const idx of m.p1) stats[idx].wins++;
+        else if (m.winner === 1) for (const idx of m.p2) stats[idx].wins++;
         const sp = calcStatPoints(m, state.winningScore, state.scoringMode);
         for (const idx of m.p1) stats[idx].points += sp.p1;
         for (const idx of m.p2) stats[idx].points += sp.p2;
@@ -1080,7 +1148,10 @@ function updateSetupHelpers() {
     if (!loaded) {
       ci.disabled = false;
       ci.max = maxCourts;
-      document.getElementById('courtsHelper').textContent = 'Ladataan Americano-taulukoita...';
+      // AUDIT-FIX: kerro latausvirheestä ja kehota yrittämään uudelleen
+      document.getElementById('courtsHelper').textContent = americanoLoadError
+        ? 'Americano-taulukoiden lataus epäonnistui. Yritä uudelleen tai käytä toista paritustyyppiä.'
+        : 'Ladataan Americano-taulukoita...';
       return;
     }
     const schedCourts = getScheduleCourts(n);
@@ -1101,7 +1172,31 @@ function updateSetupHelpers() {
     return;
   }
 
+  // AUDIT-FIX: KoC vaatii vähintään 2 kenttää ja 8 pelaajaa
+  if (type === 'koc') {
+    if (maxCourts < 2) {
+      ci.disabled = true;
+      ci.value = Math.max(1, maxCourts);
+      document.getElementById('courtsHelper').textContent =
+        'King of the Court vaatii vähintään 8 pelaajaa (2 kenttää).';
+      return;
+    }
+    ci.disabled = false;
+    ci.min = 2;
+    ci.max = maxCourts;
+    if (courtsAutoManaged) ci.value = maxCourts;
+    else {
+      const cur = parseInt(ci.value, 10);
+      if (isNaN(cur) || cur < 2) ci.value = 2;
+      else if (cur > maxCourts) ci.value = maxCourts;
+    }
+    document.getElementById('courtsHelper').textContent =
+      `Min 2, max ${maxCourts} kenttää (KoC vaatii vähintään 2).`;
+    return;
+  }
+
   ci.disabled = false;
+  ci.min = 1;
   ci.max = maxCourts;
   document.getElementById('courtsHelper').textContent = n >= 4
     ? `Max ${maxCourts} kenttää (${maxCourts * 4} pelaajaa)`
@@ -1128,10 +1223,22 @@ async function applySettings() {
   const winningScoreRaw = parseInt(document.getElementById('winningScoreInput').value, 10);
   const winningScore = isNaN(winningScoreRaw) || winningScoreRaw < 0 ? 0 : winningScoreRaw;
 
+  // AUDIT-FIX: KoC-validointi
+  if (pairingType === 'koc') {
+    if (names.length < 8) {
+      errEl.textContent = 'King of the Court vaatii vähintään 8 pelaajaa.';
+      return;
+    }
+    if (isNaN(courts) || courts < 2) {
+      errEl.textContent = 'King of the Court vaatii vähintään 2 kenttää.';
+      return;
+    }
+  }
+
   if (pairingType === 'americano') {
     if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
       showLoading('Ladataan Americano-taulukoita...');
-      await loadAmericanoSchedules();
+      await loadAmericanoSchedules(true); // AUDIT-FIX: forceRetry
       hideLoading();
     }
     const sched = AMERICANO_SCHEDULES[names.length];
@@ -1153,8 +1260,9 @@ async function applySettings() {
   const pairingChanged = state.pairingMode !== pairingMode;
   const scoringModeChanged = state.scoringMode !== scoringMode;
   const winningScoreChanged = state.winningScore !== winningScore;
+  // AUDIT-FIX: tasapelit lasketaan tuloksiksi
   const anyResults = state.currentRound &&
-                     state.currentRound.matches.some(m => m.winner === 0 || m.winner === 1);
+                     state.currentRound.matches.some(m => m.winner === 0 || m.winner === 1 || m.winner === 2);
 
   let resetRounds = false;
   let regenerateCurrent = false;
@@ -1197,6 +1305,8 @@ async function applySettings() {
       lastRoundSitOuts: lastSitOuts,
       americanoMapping: resetRounds ? null : state.americanoMapping,
       americanoBlock: resetRounds ? 0 : state.americanoBlock,
+      // AUDIT-FIX: kocInitialOrder välitetään
+      kocInitialOrder: resetRounds ? null : state.kocInitialOrder,
     };
     const gen = generateRoundForState(stForGen, newState.rounds);
     if (!gen) { errEl.textContent = 'Kierroksen luonti epäonnistui. Tarkista pelaajamäärä ja kentät.'; return; }
@@ -1209,11 +1319,18 @@ async function applySettings() {
       newState.americanoMapping = resetRounds ? null : (state.americanoMapping || null);
       newState.americanoBlock = resetRounds ? 0 : (state.americanoBlock || 0);
     }
+    // AUDIT-FIX: kocInitialOrder
+    if (gen.kocInitialOrder !== undefined) {
+      newState.kocInitialOrder = gen.kocInitialOrder;
+    } else {
+      newState.kocInitialOrder = resetRounds ? null : (state.kocInitialOrder || null);
+    }
   } else {
     newState.currentRound = state.currentRound;
     newState.tiebreakOrder = state.tiebreakOrder;
     newState.americanoMapping = state.americanoMapping;
     newState.americanoBlock = state.americanoBlock;
+    newState.kocInitialOrder = state.kocInitialOrder;
   }
 
   showLoading('Tallennetaan...');
@@ -1231,6 +1348,7 @@ async function applySettings() {
     state.tiebreakOrder = newState.tiebreakOrder;
     state.americanoMapping = newState.americanoMapping || null;
     state.americanoBlock = newState.americanoBlock || 0;
+    state.kocInitialOrder = newState.kocInitialOrder || null;
     state.viewIdx = null;
     showScreen('main');
     renderMain();
@@ -1296,14 +1414,32 @@ function renderMain() {
 
     row.appendChild(makeCompactPair(vd, m, 0, mi));
 
-    const scoreDiv = document.createElement('div');
-    scoreDiv.className = 'compact-score' + (m.winner === 0 || m.winner === 1 ? ' winner' : '');
-    if (typeof m.score1 === 'number' && typeof m.score2 === 'number') {
-      scoreDiv.textContent = `${m.score1} - ${m.score2}`;
+    // AUDIT-FIX: klikattava tulos-solu, tukee tasapeliä
+    const scoreClass = m.winner === 2 ? ' tie'
+                     : (m.winner === 0 || m.winner === 1) ? ' winner' : '';
+    const scoreBtn = document.createElement('button');
+    scoreBtn.type = 'button';
+    scoreBtn.className = 'compact-score' + scoreClass;
+    if (state.scoringMode === 'win') {
+      if (m.winner === 2) scoreBtn.textContent = '=';
+      else if (m.winner === 0 || m.winner === 1) scoreBtn.textContent = '✓';
+      else scoreBtn.textContent = '—';
     } else {
-      scoreDiv.innerHTML = '&nbsp;&nbsp;';
+      if (typeof m.score1 === 'number' && typeof m.score2 === 'number') {
+        scoreBtn.textContent = m.winner === 2 ? `${m.score1} = ${m.score2}` : `${m.score1} - ${m.score2}`;
+      } else {
+        scoreBtn.textContent = '—';
+      }
     }
-    row.appendChild(scoreDiv);
+    scoreBtn.addEventListener('click', () => {
+      if (state.scoringMode === 'win') {
+        // win-moodissa klikkaus asettaa/poistaa tasapelin
+        selectWinner(vd, mi, 2);
+      } else {
+        openScoreModal(vd, mi);
+      }
+    });
+    row.appendChild(scoreBtn);
 
     row.appendChild(makeCompactPair(vd, m, 1, mi));
 
@@ -1341,7 +1477,8 @@ function updateBottomButton(vd) {
   const btn = document.getElementById('nextRoundBtn');
   if (vd.isCurrent) {
     btn.textContent = 'Seuraava kierros';
-    btn.disabled = !vd.round.matches.every(m => m.winner === 0 || m.winner === 1);
+    // AUDIT-FIX: tasapeli lasketaan tulokseksi
+    btn.disabled = !vd.round.matches.every(m => m.winner === 0 || m.winner === 1 || m.winner === 2);
   } else {
     btn.textContent = 'Palaa nykyiseen kierrokseen';
     btn.disabled = false;
@@ -1380,16 +1517,29 @@ function matchPath(vd, matchIdx) {
   return `events/${eventCode}/state/rounds/${vd.idx}/matches/${matchIdx}`;
 }
 
+// AUDIT-FIX: tukee tasapeliä (pairIdx === 2)
 async function selectWinner(vd, matchIdx, pairIdx) {
   const m = vd.round.matches[matchIdx];
   const p = matchPath(vd, matchIdx);
   try {
-    if (m.winner === pairIdx) await update(ref(db, p), { winner: null, score1: null, score2: null });
-    else await update(ref(db, p), {
-      winner: pairIdx,
-      score1: pairIdx === 0 ? 1 : 0,
-      score2: pairIdx === 0 ? 0 : 1
-    });
+    if (pairIdx === 2) {
+      if (m.winner === 2) {
+        // poista tasapeli
+        await update(ref(db, p), { winner: null, score1: null, score2: null });
+      } else {
+        await update(ref(db, p), { winner: 2, score1: 1, score2: 1 });
+      }
+      return;
+    }
+    if (m.winner === pairIdx) {
+      await update(ref(db, p), { winner: null, score1: null, score2: null });
+    } else {
+      await update(ref(db, p), {
+        winner: pairIdx,
+        score1: pairIdx === 0 ? 1 : 0,
+        score2: pairIdx === 0 ? 0 : 1
+      });
+    }
   } catch (e) {
     alert('Tallennus epäonnistui: ' + (e.message || 'tuntematon'));
   }
@@ -1430,14 +1580,30 @@ async function saveScoreModal() {
   const s2 = parseInt(document.getElementById('score2Input').value, 10);
   const errEl = document.getElementById('scoreError');
   if (isNaN(s1) || isNaN(s2) || s1 < 0 || s2 < 0) { errEl.textContent = 'Anna kelvolliset pisteet molemmille.'; return; }
-  if (s1 === s2) { errEl.textContent = 'Tasapeli ei ole sallittu.'; return; }
   const { vd, matchIdx } = editingMatchIdx;
   const p = matchPath(vd, matchIdx);
   try {
-    await update(ref(db, p), { winner: s1 > s2 ? 0 : 1, score1: s1, score2: s2 });
+    // AUDIT-FIX: tasapeli sallittu (s1 === s2 → winner = 2)
+    if (s1 === s2) {
+      await update(ref(db, p), { winner: 2, score1: s1, score2: s2 });
+    } else {
+      await update(ref(db, p), { winner: s1 > s2 ? 0 : 1, score1: s1, score2: s2 });
+    }
     closeScoreModal();
   } catch (e) {
     errEl.textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
+  }
+}
+// AUDIT-FIX: tyhjennä tulos
+async function clearScoreModal() {
+  if (!editingMatchIdx) return;
+  const { vd, matchIdx } = editingMatchIdx;
+  const p = matchPath(vd, matchIdx);
+  try {
+    await update(ref(db, p), { winner: null, score1: null, score2: null });
+    closeScoreModal();
+  } catch (e) {
+    document.getElementById('scoreError').textContent = 'Tallennus epäonnistui: ' + (e.message || 'tuntematon');
   }
 }
 
@@ -1575,9 +1741,10 @@ async function savePairingEditor() {
     return;
   }
 
+  // AUDIT-FIX: tasapeli lasketaan tulokseksi
   const hasResults = updates.some(u => {
     const m = matches[u.i];
-    return m.winner === 0 || m.winner === 1;
+    return m.winner === 0 || m.winner === 1 || m.winner === 2;
   });
   if (hasResults) {
     if (!confirm('Muutettuihin kenttiin on kirjattu tuloksia. Tulokset poistetaan. Jatketaanko?')) return;
@@ -1607,13 +1774,16 @@ async function savePairingEditor() {
 // ============================================================
 async function nextRound() {
   if ((state.pairingType || 'mexicano') === 'americano') {
-    await loadAmericanoSchedules();
+    if (Object.keys(AMERICANO_SCHEDULES).length === 0) {
+      await loadAmericanoSchedules(true); // AUDIT-FIX: forceRetry
+    }
   }
   const stateRef = ref(db, `events/${eventCode}/state`);
   try {
     await runTransaction(stateRef, (current) => {
       if (!current || !current.currentRound) return current;
-      if (!current.currentRound.matches.every(m => m.winner === 0 || m.winner === 1)) return current;
+      // AUDIT-FIX: tasapeli lasketaan tulokseksi
+      if (!current.currentRound.matches.every(m => m.winner === 0 || m.winner === 1 || m.winner === 2)) return current;
       
       const lastSitOuts = current.currentRound.sitOuts || [];
       const allRounds = [...(current.rounds || []), current.currentRound];
@@ -1628,6 +1798,7 @@ async function nextRound() {
         lastRoundSitOuts: lastSitOuts,
         americanoMapping: current.americanoMapping || null,
         americanoBlock: typeof current.americanoBlock === 'number' ? current.americanoBlock : 0,
+        kocInitialOrder: current.kocInitialOrder || null,
       }, allRounds);
       if (!gen) return current;
       const newState = {
@@ -1639,6 +1810,9 @@ async function nextRound() {
       if (gen.americanoMapping !== undefined) {
         newState.americanoMapping = gen.americanoMapping;
         newState.americanoBlock = gen.americanoBlock;
+      }
+      if (gen.kocInitialOrder !== undefined) {
+        newState.kocInitialOrder = gen.kocInitialOrder;
       }
       return newState;
     });
@@ -1677,10 +1851,11 @@ function renderResults() {
   rows.forEach(r => {
     r.saldo = r.games > 0 ? (r.points / r.games) * 10 : 0;
   });
+  // AUDIT-FIX: viimeinen tasapeliehto: enemmän pelejä pelannut sijoittuu korkeammalle
   rows.sort((a, b) => {
     if (b.saldo !== a.saldo) return b.saldo - a.saldo;
     if (b.wins !== a.wins) return b.wins - a.wins;
-    return a.games - b.games;
+    return b.games - a.games;
   });
   const topSaldo = rows.length ? rows[0].saldo : 0;
   document.getElementById('resultsTable').innerHTML = `
@@ -1719,16 +1894,24 @@ function getAllRounds() {
   return all;
 }
 
+// AUDIT-FIX: tasapeli näytetään selkeästi
 function formatPairs(m) {
   const p1 = m.p1.map(i => state.players[i].name).join(' + ');
   const p2 = m.p2.map(i => state.players[i].name).join(' + ');
   if (m.winner === 0) return `<b>${esc(p1)}</b> vs ${esc(p2)}`;
   if (m.winner === 1) return `${esc(p1)} vs <b>${esc(p2)}</b>`;
+  if (m.winner === 2) return `${esc(p1)} vs ${esc(p2)} (tasan)`;
   return `${esc(p1)} vs ${esc(p2)}`;
 }
 
 function formatScore(m) {
-  if (m.winner !== 0 && m.winner !== 1) return '—';
+  if (m.winner !== 0 && m.winner !== 1 && m.winner !== 2) return '—';
+  if (m.winner === 2) {
+    if (state.scoringMode === 'win') return 'Tasan';
+    const s1 = typeof m.score1 === 'number' ? m.score1 : '?';
+    const s2 = typeof m.score2 === 'number' ? m.score2 : '?';
+    return `${s1}=${s2}`;
+  }
   const s1 = typeof m.score1 === 'number' ? m.score1 : '?';
   const s2 = typeof m.score2 === 'number' ? m.score2 : '?';
   const actual = `${s1}–${s2}`;
@@ -1891,15 +2074,15 @@ async function copyShareLink() {
 }
 
 // ============================================================
-// Sovelluksen päivitys (tyhjentää selaintiedot ja hakee uusimman)
+// Sovelluksen päivitys
+// AUDIT-FIX: tyhjennetään vain mexicano_*-avaimet, ei koko origin-tallennusta
 // ============================================================
 async function updateApp() {
   const warning =
     '⚠️ VAROITUS: Sovelluksen päivitys\n\n' +
     'Tämä toiminto:\n' +
-    '  • Tyhjentää KAIKKI tämän selaimen tiedot\n' +
+    '  • Tyhjentää tämän sovelluksen paikalliset tiedot (mexicano_*)\n' +
     '  • Poistaa "Omat tapahtumat" -listan\n' +
-    '  • Poistaa välimuistit ja istuntotiedot\n' +
     '  • Hakee palvelimelta uusimman sovelluskoodin\n\n' +
     'Tapahtumat säilyvät palvelimella (Firebase), mutta tämä selain ' +
     'ei enää muista niitä automaattisesti. Voit liittyä tapahtumaan ' +
@@ -1911,21 +2094,26 @@ async function updateApp() {
   showLoading('Tyhjennetään selaintietoja ja haetaan uusinta versiota...');
 
   try {
-    // 1. Tyhjennä localStorage
-    try { localStorage.clear(); } catch (e) { console.warn('localStorage clear failed', e); }
+    // AUDIT-FIX: vain mexicano_*-avaimet
+    try {
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('mexicano_')) toRemove.push(k);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) { console.warn('localStorage clear failed', e); }
 
-    // 2. Tyhjennä sessionStorage
-    try { sessionStorage.clear(); } catch (e) { console.warn('sessionStorage clear failed', e); }
+    try {
+      const toRemove = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith('mexicano_')) toRemove.push(k);
+      }
+      toRemove.forEach(k => sessionStorage.removeItem(k));
+    } catch (e) { console.warn('sessionStorage clear failed', e); }
 
-    // 3. Tyhjennä Cache API -välimuistit
-    if ('caches' in window) {
-      try {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      } catch (e) { console.warn('Cache API clear failed', e); }
-    }
-
-    // 4. Poista service worker -rekisteröinnit
+    // Service worker -rekisteröinnit (jos niitä on)
     if ('serviceWorker' in navigator) {
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -1933,11 +2121,9 @@ async function updateApp() {
       } catch (e) { console.warn('Service worker unregister failed', e); }
     }
 
-    // 5. Hae uusin sovelluskoodi palvelimelta cache-bustin avulla
     const url = new URL(location.href);
     url.search = '';
     url.searchParams.set('v', Date.now().toString());
-    // Käytä replaceä, jotta vanha sivu ei jää historiaan
     location.replace(url.toString());
   } catch (e) {
     hideLoading();
@@ -2021,6 +2207,8 @@ document.getElementById('historyFilter').addEventListener('change', renderHistor
 
 document.getElementById('scoreCancelBtn').addEventListener('click', closeScoreModal);
 document.getElementById('scoreSaveBtn').addEventListener('click', saveScoreModal);
+// AUDIT-FIX: tyhjennä-nappi
+document.getElementById('scoreClearBtn').addEventListener('click', clearScoreModal);
 document.getElementById('scoreModal').addEventListener('click', (e) => {
   if (e.target.id === 'scoreModal') closeScoreModal();
 });
@@ -2065,7 +2253,7 @@ window.addEventListener('popstate', () => {
 // Käynnistys
 // ============================================================
 (function init() {
-  // Lataa Americano-taulukot taustalla (fetch on välimuistissa)
+  // Lataa Americano-taulukot taustalla
   loadAmericanoSchedules();
 
   // Päivitä versiolinkkien teksti dynaamisesti
