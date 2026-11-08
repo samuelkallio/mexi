@@ -1,21 +1,14 @@
 <!--
   ============================================================
   Mexicano / Americano / King of the Court
-  Versio: 1.10.0
-  Päivitetty: 2026-11-07
+  Versio: 1.10.1
+  Päivitetty: 2026-11-08
   ============================================================
-  Muutokset v1.10.0:
-  - Tulokset takaisin taulukoksi. Leveällä näytöllä + yli 6
-    pelaajaa → 2 saraketta (esim. 11 → 6 + 5).
-  - "Kierrokset" siirretty ⋯-valikkoon.
-  - Näyttöasetukset (teema + tekstikoko) omaan modaaliin.
-  - Tekstikoko +/- 75–150 % (5 % askel).
-  - Parinvaihtoeditorin parit allekkain + "vs".
-  - Ylätunnisteesta poistettu "mennyt".
-  - Pelaajalistan muutokset ilman nollausta:
-    lisäys → seuraavaan peliin, poisto → pois seuraavista
-    (säilyy tuloksissa), sama nimi takaisin → statsit jatkuvat,
-    nimen korjaus → päivittyy kaikkialle.
+  Muutokset v1.10.1:
+  - Tulostaulukon sarakeotsikot lyhennetty (S, P, V, O, T)
+  - Nimi-sarake priorisoitu (ei rivity, ellipsi jos liian pitkä)
+  - Estetty sarakkeiden päällekkäisyys zoomattaessa
+    (grid minmax(0, 1fr) + taulukon auto-leveys)
   ============================================================
 -->
 <!DOCTYPE html>
@@ -39,7 +32,6 @@
     if (storedScale) {
       var num = parseFloat(storedScale);
       if (num > 0 && num <= 2) {
-        // Vanha muoto (0.875, 1, 1.125, 1.25) → prosentiksi
         pct = Math.round(num * 100);
         localStorage.setItem('mexicano_ui_scale', String(pct));
       } else if (num >= 75 && num <= 150) {
@@ -253,7 +245,7 @@
   .results-container { display: block; }
   .results-container > .results-table { margin-bottom: 12px; }
   @media (min-width: 768px) {
-    .results-container.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    .results-container.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
     .results-container.split > .results-table { margin-bottom: 0; }
     .results-container.split .results-table { font-size: 0.85rem; }
     .results-container.split .results-table th, .results-container.split .results-table td { padding: 7px 5px; }
@@ -261,11 +253,11 @@
   .results-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
   .results-table th, .results-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
   .results-table th { background: var(--surface-2); font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
-  .results-table td.num, .results-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table td.num, .results-table th.num { text-align: right; font-variant-numeric: tabular-nums; width: 1%; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
   .results-table tr:last-child td { border-bottom: none; }
   .results-table tr.rank-1 td { font-weight: 700; background: var(--rank-1-bg); }
-  .name-cell { word-break: break-word; }
-  .rank-num { display: inline-block; min-width: 1.6em; color: var(--text-muted); font-weight: 600; font-size: 0.85em; margin-right: 4px; font-variant-numeric: tabular-nums; }
+  .name-cell { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: normal; }
+  .rank-num { display: inline-block; min-width: 1.2em; color: var(--text-muted); font-weight: 600; font-size: 0.85em; margin-right: 4px; font-variant-numeric: tabular-nums; }
   .results-legend { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 12px 0; }
 
   /* Historia – pystylista */
@@ -378,7 +370,7 @@
 
   <div id="landingError" class="error"></div>
   <div class="version-footer">
-    <a class="version-link" data-version-link>Versio 1.10.0</a>
+    <a class="version-link" data-version-link>Versio 1.10.1</a>
   </div>
 </div>
 
@@ -447,7 +439,7 @@
     <button class="btn-primary" id="startBtn" style="margin-top:8px">Aloita</button>
     <button class="btn-secondary" id="cancelSettingsBtn" style="width:100%;margin-top:8px;display:none">Peruuta</button>
     <div class="version-footer">
-      <a class="version-link" data-version-link>Versio 1.10.0</a>
+      <a class="version-link" data-version-link>Versio 1.10.1</a>
     </div>
   </div>
 </div>
@@ -628,7 +620,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.10.1';
 
 // ============================================================
 // Näyttöasetukset
@@ -1665,7 +1657,6 @@ function renderMain() {
   const total = state.rounds.length + 1;
   const activeCount = state.players.filter(p => p.active !== false).length;
   const info = document.getElementById('topbarMainInfo');
-  // Ei "mennyt"-tagia
   info.innerHTML = `K ${vd.roundNumber}/${total}<span class="dot">·</span>${activeCount}p`;
   document.getElementById('prevRoundBtn').disabled = !canGoBack();
   document.getElementById('nextRoundArrowBtn').disabled = !canGoForward();
@@ -1873,7 +1864,6 @@ function renderPairingEditor() {
   let html = '';
   pairingEditorState.matches.forEach((m, ci) => {
     html += `<div class="pe-court"><div class="pe-court-label">Kenttä ${ci + 1}</div>`;
-    // Parit allekkain
     html += `<div class="pe-pair-row">`;
     m.p1.forEach((pi, slot) => { html += renderPePlayer({ type: 'court', courtIdx: ci, pair: 0, slot }, pi); });
     html += `</div>`;
@@ -1984,7 +1974,7 @@ async function nextRound() {
 }
 
 // ============================================================
-// Tulokset – taulukko (2 saraketta leveällä näytöllä + >6 pelaajaa)
+// Tulokset – taulukko
 // ============================================================
 function renderResultsQr() {
   const container = document.getElementById('resultsQr');
@@ -2003,7 +1993,6 @@ function renderResults() {
   const allRows = state.players.map((p, i) => ({
     name: p.name, idx: i, active: p.active !== false, ...stats[i]
   }));
-  // Näytä aktiiviset + ne, joilla on historiassa pelejä tai taukoja
   const rows = allRows.filter(r => r.active || r.games > 0 || r.sitOuts > 0);
   rows.forEach(r => { r.saldo = r.games > 0 ? (r.points / r.games) * 10 : 0; });
   rows.sort((a, b) => {
@@ -2024,11 +2013,11 @@ function renderResults() {
   function renderTable(slice, offset) {
     let html = `<table class="results-table"><thead><tr>
       <th>Nimi</th>
-      <th class="num">Saldo</th>
-      <th class="num">Pisteet</th>
-      <th class="num">Voitot</th>
-      <th class="num">Pelit</th>
-      <th class="num">Tauot</th>
+      <th class="num" title="Saldo">S</th>
+      <th class="num" title="Pisteet">P</th>
+      <th class="num" title="Voitot">V</th>
+      <th class="num" title="Ottelut">O</th>
+      <th class="num" title="Tauot">T</th>
     </tr></thead><tbody>`;
     slice.forEach((r, i) => {
       const rank = offset + i + 1;
@@ -2092,7 +2081,6 @@ function formatScoreText(m) {
 function renderHistoryScreen() {
   const filterSelect = document.getElementById('historyFilter');
   const currentVal = filterSelect.value;
-  // Näytä suodattimessa kaikki pelaajat (myös inaktiiviset jos heillä on pelejä)
   const stats = computeStats();
   const visiblePlayers = state.players.filter((p, i) => p.active !== false || stats[i].games > 0 || stats[i].sitOuts > 0);
   filterSelect.innerHTML = '<option value="">Kaikki</option>' +
@@ -2413,7 +2401,6 @@ window.addEventListener('resize', () => { if (state.screen === 'results') render
   loadAmericanoSchedules();
   updateThemeColorMeta();
 
-  // Alusta tekstikoon nykyinen arvo
   try {
     const stored = localStorage.getItem('mexicano_ui_scale');
     if (stored) {
